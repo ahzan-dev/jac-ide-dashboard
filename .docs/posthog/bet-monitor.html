@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bet Monitor — AI Builder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0A0D13;
+    --surface:#121823;
+    --surface-2:#0F141D;
+    --line:#222B3A;
+    --line-soft:#1A2230;
+    --txt:#E8EDF4;
+    --txt-mute:#7A8699;
+    --txt-faint:#4E5A6E;
+    --alive:#2DD4A0;
+    --alive-dim:#173e34;
+    --fail:#F2585B;
+    --fail-dim:#3d1c20;
+    --watch:#F5B544;
+    --watch-dim:#3a2e16;
+    --data:#5BC8FF;
+    --r:10px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    background:
+      radial-gradient(1200px 600px at 80% -10%, #131c2b 0%, transparent 60%),
+      var(--ink);
+    color:var(--txt);
+    font-family:'Space Grotesk',system-ui,sans-serif;
+    line-height:1.4;
+    padding:22px;
+    min-height:100vh;
+  }
+  .mono{font-family:'IBM Plex Mono',monospace;font-feature-settings:"tnum"}
+
+  /* ---------- TOP VERDICT BAR ---------- */
+  .topbar{
+    display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+    border:1px solid var(--line);background:linear-gradient(180deg,#141b27,#0e141d);
+    border-radius:var(--r);padding:16px 20px;margin-bottom:6px;
+  }
+  .brand{display:flex;flex-direction:column;gap:2px}
+  .brand .ey{font-size:10px;letter-spacing:.28em;color:var(--txt-faint);text-transform:uppercase}
+  .brand h1{font-size:19px;font-weight:700;letter-spacing:-.01em}
+  .verdict{
+    display:flex;align-items:center;gap:12px;margin-left:auto;
+    padding:10px 18px;border-radius:8px;border:1px solid var(--alive);
+    background:var(--alive-dim);
+  }
+  .verdict .pulse{width:9px;height:9px;border-radius:50%;background:var(--alive);box-shadow:0 0 0 0 var(--alive);animation:p 2.4s infinite}
+  @keyframes p{0%{box-shadow:0 0 0 0 rgba(45,212,160,.5)}70%{box-shadow:0 0 0 9px rgba(45,212,160,0)}100%{box-shadow:0 0 0 0 rgba(45,212,160,0)}}
+  .verdict .lbl{font-size:9px;letter-spacing:.24em;color:var(--txt-mute);text-transform:uppercase}
+  .verdict .word{font-size:18px;font-weight:700;color:var(--alive);letter-spacing:.02em}
+  .clock{display:flex;flex-direction:column;align-items:flex-end;gap:1px;padding-left:18px;border-left:1px solid var(--line)}
+  .clock .v{font-size:18px;font-weight:600}
+  .clock .k{font-size:9px;letter-spacing:.2em;color:var(--txt-faint);text-transform:uppercase}
+  .clock .v.warn{color:var(--watch)}
+
+  .meta{display:flex;gap:18px;align-items:center;color:var(--txt-faint);font-size:11px;margin:10px 2px 18px}
+  .meta .dot{width:3px;height:3px;border-radius:50%;background:var(--txt-faint)}
+  .legend{display:flex;gap:14px;margin-left:auto}
+  .legend span{display:flex;align-items:center;gap:5px}
+  .legend i{width:9px;height:9px;border-radius:2px;display:inline-block}
+
+  /* ---------- SECTION ---------- */
+  .section{margin-bottom:22px}
+  .shead{display:flex;align-items:baseline;gap:12px;margin-bottom:11px;padding-left:2px}
+  .shead .num{font-family:'IBM Plex Mono';font-size:11px;color:var(--txt-faint);font-weight:600}
+  .shead h2{font-size:12px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--txt)}
+  .shead .sub{font-size:11px;color:var(--txt-mute);margin-left:auto;font-style:italic}
+
+  .grid{display:grid;gap:12px}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g4{grid-template-columns:repeat(4,1fr)}
+  .g2{grid-template-columns:repeat(2,1fr)}
+
+  /* ---------- TILE ---------- */
+  .tile{
+    border:1px solid var(--line-soft);background:var(--surface);
+    border-radius:var(--r);padding:15px 16px 14px;position:relative;overflow:hidden;
+    display:flex;flex-direction:column;min-height:118px;
+  }
+  .tile.hero{min-height:178px}
+  .tile .edge{position:absolute;left:0;top:0;bottom:0;width:3px}
+  .tile.s-alive .edge{background:var(--alive)}
+  .tile.s-watch .edge{background:var(--watch)}
+  .tile.s-fail .edge{background:var(--fail)}
+  .t-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+  .t-name{font-size:11px;color:var(--txt-mute);font-weight:500;letter-spacing:.02em;max-width:78%}
+  .slope-pill{font-family:'IBM Plex Mono';font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;white-space:nowrap}
+  .sp-alive{color:var(--alive);background:var(--alive-dim)}
+  .sp-watch{color:var(--watch);background:var(--watch-dim)}
+  .sp-fail{color:var(--fail);background:var(--fail-dim)}
+  .t-val{font-family:'IBM Plex Mono';font-weight:600;font-size:30px;letter-spacing:-.02em;margin-top:8px;line-height:1}
+  .tile.hero .t-val{font-size:38px;margin-top:10px}
+  .t-val .u{font-size:15px;color:var(--txt-mute);font-weight:500}
+  .t-sub{font-size:10.5px;color:var(--txt-faint);margin-top:5px;font-family:'IBM Plex Mono'}
+  .t-spark{margin-top:auto;padding-top:10px}
+  svg{display:block;width:100%;overflow:visible}
+
+  /* funnel */
+  .funnel{display:flex;flex-direction:column;gap:7px;margin-top:12px}
+  .frow{display:grid;grid-template-columns:96px 1fr 42px;align-items:center;gap:10px;font-size:11px}
+  .frow .fl{color:var(--txt-mute)}
+  .fbar{height:18px;background:var(--surface-2);border-radius:4px;overflow:hidden;position:relative;border:1px solid var(--line-soft)}
+  .fbar i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:linear-gradient(90deg,#2b7d9e,#5BC8FF)}
+  .fbar.drop i{background:linear-gradient(90deg,#7a3a3c,#F2585B)}
+  .fpct{font-family:'IBM Plex Mono';text-align:right;font-size:11px}
+  .fdrop{font-family:'IBM Plex Mono';font-size:9.5px;color:var(--fail);text-align:right}
+
+  /* split bars (iterations / where-die) */
+  .split{display:flex;flex-direction:column;gap:9px;margin-top:12px}
+  .srow{display:flex;flex-direction:column;gap:4px}
+  .srow .sl{display:flex;justify-content:space-between;font-size:10.5px;color:var(--txt-mute)}
+  .srow .sl b{font-family:'IBM Plex Mono';color:var(--txt);font-weight:600}
+  .strack{height:7px;border-radius:4px;background:var(--surface-2);overflow:hidden}
+  .strack i{display:block;height:100%;border-radius:4px}
+
+  /* dual legend inside tile */
+  .dleg{display:flex;gap:14px;margin-top:9px;font-size:10px;color:var(--txt-mute)}
+  .dleg span{display:flex;align-items:center;gap:5px}
+  .dleg i{width:14px;height:2px;display:inline-block;border-radius:2px}
+
+  /* ---------- SCARIEST ---------- */
+  .scary{
+    border:1px solid var(--fail);border-radius:var(--r);
+    background:linear-gradient(180deg,#1c0f12,#140b0d);
+    padding:18px 20px;margin-bottom:22px;display:flex;gap:20px;align-items:flex-start;
+  }
+  .scary .tag{font-size:9px;letter-spacing:.24em;color:var(--fail);text-transform:uppercase;font-weight:600;
+    border:1px solid var(--fail);border-radius:5px;padding:6px 9px;white-space:nowrap;margin-top:3px}
+  .scary .body h3{font-size:16px;font-weight:600;margin-bottom:6px;letter-spacing:-.01em}
+  .scary .body h3 b{color:var(--fail);font-family:'IBM Plex Mono'}
+  .scary .body p{font-size:12.5px;color:var(--txt-mute);max-width:760px}
+  .scary .body p strong{color:var(--txt)}
+  .scary .exp{margin-top:11px;font-size:11px;color:var(--txt-mute);display:flex;gap:8px;flex-wrap:wrap}
+  .scary .exp .k{color:var(--txt-faint);text-transform:uppercase;letter-spacing:.12em;font-size:9px;align-self:center}
+  .scary .chip{font-size:11px;background:#1f1416;border:1px solid #3a2126;border-radius:5px;padding:4px 9px;font-family:'IBM Plex Mono'}
+
+  .foot{font-size:10.5px;color:var(--txt-faint);text-align:center;margin-top:8px;line-height:1.7}
+  .foot b{color:var(--txt-mute)}
+
+  @media(max-width:1000px){.g4{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:1fr}}
+  @media(max-width:640px){.g4,.g2{grid-template-columns:1fr}.verdict{margin-left:0}.t-val{font-size:26px}}
+  @media(prefers-reduced-motion:reduce){.pulse{animation:none}}
+</style>
+</head>
+<body>
+
+  <!-- VERDICT BAR -->
+  <div class="topbar">
+    <div class="brand">
+      <span class="ey">Burn-phase leadership view</span>
+      <h1>Bet Monitor — AI Builder</h1>
+    </div>
+    <div class="verdict">
+      <span class="pulse"></span>
+      <div>
+        <div class="lbl">The bet is</div>
+        <div class="word">COMPOUNDING</div>
+      </div>
+    </div>
+    <div class="clock">
+      <span class="v warn mono">11.0 mo</span>
+      <span class="k">Runway</span>
+    </div>
+    <div class="clock">
+      <span class="v mono">$182k</span>
+      <span class="k">Monthly burn</span>
+    </div>
+  </div>
+
+  <div class="meta">
+    <span class="mono">Week 24 · 2026</span><i class="dot"></i>
+    <span>vs. prior 4-wk period</span><i class="dot"></i>
+    <span>colour = slope direction, not value</span>
+    <div class="legend">
+      <span><i style="background:var(--alive)"></i>slope right</span>
+      <span><i style="background:var(--watch)"></i>flattening</span>
+      <span><i style="background:var(--fail)"></i>slope wrong</span>
+    </div>
+  </div>
+
+  <!-- SCARIEST NUMBER -->
+  <div class="scary">
+    <span class="tag">Scariest number</span>
+    <div class="body">
+      <h3>Of every abandoned project, <b>41%</b> die <em>after</em> a successful preview.</h3>
+      <p>People watch a working app render — then leave anyway. This is the <strong>"almost works" gap</strong> made visible: the AI ships something that runs but isn't the thing they actually wanted. Our raw "generation success" rate scores these as wins, which is why the leak hid for two months.</p>
+      <div class="exp">
+        <span class="k">This week's move</span>
+        <span class="chip">Ship "describe what's wrong" re-prompt on preview</span>
+        <span class="chip">Replay 30 post-preview abandons</span>
+        <span class="chip">Known by Friday: does kept-rate move?</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 1: THE BET -->
+  <div class="section">
+    <div class="shead"><span class="num">01</span><h2>The Bet</h2><span class="sub">if these three slopes are right, nothing else can be too wrong</span></div>
+    <div class="grid g3">
+
+      <div class="tile hero s-alive">
+        <span class="edge"></span>
+        <div class="t-top"><span class="t-name">W4 retention by cohort — the line must bend up</span><span class="slope-pill sp-alive">▲ +7.2pt</span></div>
+        <div class="t-val">19<span class="u">%</span></div>
+        <div class="t-sub">latest cohort · was 11.8% five cohorts ago</div>
+        <div class="t-spark"><svg viewBox="0 0 300 60" data-spark="11.8,13.4,14.1,16.5,17.2,19.0" data-color="alive" data-fill="1"></svg></div>
+      </div>
+
+      <div class="tile hero s-alive">
+        <span class="edge"></span>
+        <div class="t-top"><span class="t-name">Margin slope — cost/user down, revenue/user up</span><span class="slope-pill sp-alive">gap +$5.9</span></div>
+        <div class="t-val">$9.10 <span class="u">/ $3.20</span></div>
+        <div class="t-sub">rev per active · cost per active (gap widening)</div>
+        <div class="t-spark"><svg viewBox="0 0 300 60"
+            data-dual-a="6.0,6.4,7.2,7.9,8.5,9.1" data-dual-b="4.2,3.9,3.7,3.4,3.3,3.2"></svg></div>
+        <div class="dleg"><span><i style="background:var(--data)"></i>revenue/user</span><span><i style="background:var(--watch)"></i>cost/user</span></div>
+      </div>
+
+      <div class="tile hero s-alive">
+        <span class="edge"></span>
+        <div class="t-top"><span class="t-name">North Star — weekly active builders who ship</span><span class="slope-pill sp-alive">▲ +34%</span></div>
+        <div class="t-val">2,140</div>
+        <div class="t-sub">shipped ≥1 working app this week · 12-wk trend</div>
+        <div class="t-spark"><svg viewBox="0 0 300 60" data-spark="1180,1290,1340,1410,1520,1480,1610,1690,1740,1880,1990,2140" data-color="data" data-fill="1"></svg></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- SECTION 2: THE ENGINE -->
+  <div class="section">
+    <div class="shead"><span class="num">02</span><h2>The Engine</h2><span class="sub">activation is the lever the burn money buys — prove it moves</span></div>
+    <div class="grid g4">
+
+      <div class="tile s-alive">
+        <span class="edge"></span>
+        <div class="t-top"><span class="t-name">Activation rate</span><span class="slope-pill sp-alive">▲ +6pt</span></div>
+        <div class="t-val">38<span class="u">%</span></div>
+        <div class="t-sub">signups who ship 1st app</div>
+        <div class="t-spark"><svg viewBox="0 0 200 40" data-spark="28,29,31,33,35,38" data-color="alive"></svg></div>
+      </div>
+
+      <div class="tile s-alive">
+        <span class="edge"></span>
+        <div class="t-top"><span class="t-name">Time to first shipped app</span><span class="slope-pill sp-alive">▼ −36%</span></div>
+        <div class="t-val">9<span class="u">min</span></div>
+        <div class="t-sub">median · was 14m</div>
+        <div class="t-spark"><svg viewBox="0 0 200 40" data-spark="14,13,12.5,11,10,9" data-color="alive"></svg></div>
+      </div>
+
+      <div class="tile s-watch" style="grid-row:span 1">
+        <span class="edge"></span>
+        <div class="t-top"><span class="t-name">"Actually worked" rate — user kept the output</span><span class="slope-pill sp-watch">▲ slow</span></div>
+        <div class="t-val">58<span class="u">%</span></div>
+        <div class="t-sub">not the "code compiled" rate (that reads 64%)</div>
+        <div class="t-spark"><svg viewBox="0 0 200 40" data-spark="51,52,54,55,56,58" data-color="watch"></svg></div>
+      </div>
+
+      <div class="tile s-fail">
+        <span class="edge"></span>
+        <div class="t-top"><span class="t-name">Activation funnel</span><span class="slope-pill sp-fail">2 leaks</span></div>
+        <div class="funnel">
+          <div class="frow"><span class="fl">Signup</span><div class="fbar"><i style="width:100%"></i></div><span class="fpct">100%</span></div>
+          <div class="frow"><span class="fl">Project</span><div class="fbar"><i style="width:78%"></i></div><span class="fpct">78%</span></div>
+          <div class="frow"><span class="fl">Gen success</span><div class="fbar drop"><i style="width:64%"></i></div><span class="fdrop">−14</span></div>
+          <div class="frow"><span class="fl">Preview</span><div class="fbar"><i style="width:52%"></i></div><span class="fpct">52%</span></div>
+          <div class="frow"><span class="fl">Deploy</span><div class="fbar drop"><i style="width:38%"></i></div><span class="fdrop">−14</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- SECTION 3: THE LEAK -->
+  <div class="section">
+    <div class="shead"><span class="num">03</span><h2>The Leak</h2><span class="sub">growth on bad retention = paying to fill a leaky bucket faster</span></div>
+    <div class="grid g4">
+
+      <div class="tile s-alive">
+        <span class="edge"></span>
+        <div class="t-top"><span class="t-name">Retention curve — this cohort vs. prior</span><span class="slope-pill sp-alive">stickier</span></div>
+        <div class="t-spark" style="margin-top:14px">
+          <svg viewBox="0 0 200 70"
+            data-curve-a="100,46,31,24,19" data-curve-b="100,40,26,18,14"></svg>
+        </div>
+        <div class="dleg"><span><i style="background:var(--alive)"></i>current</span><span><i style="background:var(--txt-faint)"></i>prior</span></div>
+      </div>
+
+      <div class="tile s-watch">
+        <span class="edge"></span>
+        <div class="t-top"><span class="t-name">Churn / resurrection</span><span class="slope-pill sp-watch">net −3.1</span></div>
+        <div class="t-val">7.2<span class="u">%</span></div>
+        <div class="t-sub">monthly churn · 4.1% resurrected</div>
+        <div class="t-spark"><svg viewBox="0 0 200 40" data-spark="9.0,8.4,8.1,7.7,7.4,7.2" data-color="watch"></svg></div>
+      </div>
+
+      <div class="tile s-fail">
+        <span class="edge"></span>
+        <div class="t-top"><span class="t-name">Iterations per project, split by outcome</span></div>
+        <div class="split">
+          <div class="srow"><div class="sl">Many iters → <span style="color:var(--alive)">shipped</span> (healthy)<b>3.2 avg</b></div><div class="strack"><i style="width:42%;background:var(--alive)"></i></div></div>
+          <div class="srow"><div class="sl">Many iters → <span style="color:var(--fail)">abandoned</span> (1st output failing)<b>6.8 avg</b></div><div class="strack"><i style="width:88%;background:var(--fail)"></i></div></div>
+        </div>
+      </div>
+
+      <div class="tile s-fail">
+        <span class="edge"></span>
+        <div class="t-top"><span class="t-name">Where projects die</span><span class="slope-pill sp-fail">post-preview</span></div>
+        <div class="split">
+          <div class="srow"><div class="sl">After preview <b>41%</b></div><div class="strack"><i style="width:41%;background:var(--fail)"></i></div></div>
+          <div class="srow"><div class="sl">Mid-generation <b>28%</b></div><div class="strack"><i style="width:28%;background:var(--watch)"></i></div></div>
+          <div class="srow"><div class="sl">At prompt <b>18%</b></div><div class="strack"><i style="width:18%;background:var(--txt-faint)"></i></div></div>
+          <div class="srow"><div class="sl">Other <b>13%</b></div><div class="strack"><i style="width:13%;background:var(--txt-faint)"></i></div></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- SECTION 4: COST OF THE BET -->
+  <div class="section">
+    <div class="shead"><span class="num">04</span><h2>Cost of the Bet</h2><span class="sub">you're spending on purpose — so watch the spend on purpose</span></div>
+    <div class="grid g4">
+
+      <div class="tile s-alive">
+        <span class="edge"></span>
+        <div class="t-top"><span class="t-name">Cost per generation</span><span class="slope-pill sp-alive">▼ −31%</span></div>
+        <div class="t-val">$0.21</div>
+        <div class="t-sub">caching + model routing biting</div>
+        <div class="t-spark"><svg viewBox="0 0 200 40" data-spark="0.31,0.29,0.27,0.25,0.23,0.21" data-color="alive"></svg></div>
+      </div>
+
+      <div class="tile s-watch">
+        <span class="edge"></span>
+        <div class="t-top"><span class="t-name">Inference spend (mo)</span><span class="slope-pill sp-watch">▲ +12%</span></div>
+        <div class="t-val">$71<span class="u">k</span></div>
+        <div class="t-sub">rising w/ volume — watch vs cost/gen</div>
+        <div class="t-spark"><svg viewBox="0 0 200 40" data-spark="48,54,58,61,66,71" data-color="watch"></svg></div>
+      </div>
+
+      <div class="tile s-alive">
+        <span class="edge"></span>
+        <div class="t-top"><span class="t-name">CAC vs. 90-day value</span><span class="slope-pill sp-alive">2.4×</span></div>
+        <div class="t-val">$38 <span class="u">→ $92</span></div>
+        <div class="t-sub">organic 3.1× · paid-search 1.4×</div>
+        <div class="t-spark"><svg viewBox="0 0 200 40" data-spark="1.6,1.8,2.0,2.1,2.3,2.4" data-color="alive"></svg></div>
+      </div>
+
+      <div class="tile s-fail">
+        <span class="edge"></span>
+        <div class="t-top"><span class="t-name">Top 10% power-user cost — watch by name</span><span class="slope-pill sp-fail">38% of spend</span></div>
+        <div class="t-val">$27<span class="u">k</span></div>
+        <div class="t-sub">9% pay · the rest are subsidised</div>
+        <div class="t-spark"><svg viewBox="0 0 200 40" data-spark="22,23,24,25,26,27" data-color="fail"></svg></div>
+      </div>
+
+    </div>
+  </div>
+
+  <p class="foot">
+    <b>14 tiles. Every colour is a decision.</b> A metric that doesn't move one of the three Section-01 slopes isn't on this page — it lives in a diagnostics view you open only when a top number breaks.<br>
+    This shows <b>what</b> and <b>where</b> people die — never <b>why</b>. Pair it with session replays on abandoned projects + 5 user interviews / week.
+  </p>
+
+<script>
+  // tiny dependency-free sparkline + chart renderer
+  const W=300,H=60;
+  function scale(arr,w,h,pad){const mn=Math.min(...arr),mx=Math.max(...arr),r=(mx-mn)||1;
+    return arr.map((v,i)=>[pad+ i*(w-2*pad)/(arr.length-1), h-pad-((v-mn)/r)*(h-2*pad)]);}
+  function path(pts){return pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');}
+  const C={alive:'#2DD4A0',watch:'#F5B544',fail:'#F2585B',data:'#5BC8FF'};
+
+  document.querySelectorAll('svg[data-spark]').forEach(svg=>{
+    const vb=svg.viewBox.baseVal,w=vb.width,h=vb.height;
+    const arr=svg.dataset.spark.split(',').map(Number);
+    const col=C[svg.dataset.color]||C.data, pts=scale(arr,w,h,6);
+    let inner='';
+    if(svg.dataset.fill){
+      const area=path(pts)+` L ${pts[pts.length-1][0].toFixed(1)} ${h} L ${pts[0][0].toFixed(1)} ${h} Z`;
+      const id='g'+Math.random().toString(36).slice(2,7);
+      inner+=`<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="${col}" stop-opacity=".22"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></linearGradient></defs>
+        <path d="${area}" fill="url(#${id})"/>`;
+    }
+    inner+=`<path d="${path(pts)}" fill="none" stroke="${col}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+    const last=pts[pts.length-1];
+    inner+=`<circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="3" fill="${col}"/>`;
+    svg.innerHTML=inner;
+  });
+
+  // dual line (margin)
+  document.querySelectorAll('svg[data-dual-a]').forEach(svg=>{
+    const vb=svg.viewBox.baseVal,w=vb.width,h=vb.height;
+    const a=svg.dataset.dualA.split(',').map(Number), b=svg.dataset.dualB.split(',').map(Number);
+    const all=a.concat(b),mn=Math.min(...all),mx=Math.max(...all),r=(mx-mn)||1,pad=8;
+    const sc=arr=>arr.map((v,i)=>[pad+i*(w-2*pad)/(arr.length-1),h-pad-((v-mn)/r)*(h-2*pad)]);
+    const pa=sc(a),pb=sc(b);
+    svg.innerHTML=
+      `<path d="${path(pa)}" fill="none" stroke="${C.data}" stroke-width="2" stroke-linecap="round"/>`+
+      `<path d="${path(pb)}" fill="none" stroke="${C.watch}" stroke-width="2" stroke-linecap="round" stroke-dasharray="1 4"/>`+
+      `<circle cx="${pa[pa.length-1][0].toFixed(1)}" cy="${pa[pa.length-1][1].toFixed(1)}" r="3" fill="${C.data}"/>`+
+      `<circle cx="${pb[pb.length-1][0].toFixed(1)}" cy="${pb[pb.length-1][1].toFixed(1)}" r="3" fill="${C.watch}"/>`;
+  });
+
+  // retention curves
+  document.querySelectorAll('svg[data-curve-a]').forEach(svg=>{
+    const vb=svg.viewBox.baseVal,w=vb.width,h=vb.height,pad=8;
+    const a=svg.dataset.curveA.split(',').map(Number),b=svg.dataset.curveB.split(',').map(Number);
+    const sc=arr=>arr.map((v,i)=>[pad+i*(w-2*pad)/(arr.length-1),h-pad-(v/100)*(h-2*pad)]);
+    const pa=sc(a),pb=sc(b);
+    svg.innerHTML=
+      `<path d="${path(pb)}" fill="none" stroke="${C.faint||'#4E5A6E'}" stroke-width="1.6" stroke-dasharray="3 3"/>`+
+      `<path d="${path(pa)}" fill="none" stroke="${C.alive}" stroke-width="2.2" stroke-linecap="round"/>`+
+      pa.map(p=>`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.4" fill="${C.alive}"/>`).join('');
+  });
+</script>
+</body>
+</html>

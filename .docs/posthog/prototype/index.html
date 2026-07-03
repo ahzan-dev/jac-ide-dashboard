@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JacHammer · Dashboard</title>
+<style>
+  :root{
+    --plane:#0a0a0a; --surface:#141414; --surface-2:#1c1c1b; --sidebar:#0f0f0f;
+    --ink:#ffffff; --ink-2:#c3c2b7; --muted:#8a8a84;
+    --grid:#262625; --axis:#383835; --border:rgba(255,255,255,.09);
+    --series:#3987e5; --accent:#d95926;
+    --good:#0ca30c; --warning:#fab219; --critical:#d03b3b; --r:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--plane);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;-webkit-font-smoothing:antialiased}
+  a{color:inherit;text-decoration:none}
+  code{background:var(--surface-2);padding:1px 5px;border-radius:4px;font-size:12px}
+
+  .app{display:flex;min-height:100vh}
+  /* sidebar */
+  #sidebar{width:232px;flex:none;background:var(--sidebar);border-right:1px solid var(--border);padding:18px 12px;position:sticky;top:0;height:100vh;overflow-y:auto}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px;padding:4px 8px 18px}
+  .logo .dot{width:11px;height:11px;border-radius:3px;background:var(--accent);box-shadow:0 0 16px 2px rgba(217,89,38,.5)}
+  .navgroup{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);font-weight:700;padding:14px 8px 6px}
+  .navitem{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:9px;color:var(--ink-2);font-size:13px;margin-bottom:1px}
+  .navitem:hover{background:var(--surface)}
+  .navitem.on{background:var(--surface-2);color:var(--ink);font-weight:600}
+  .navitem .rd{font-size:9px;filter:saturate(1.2)}
+  .sidefoot{margin-top:22px;padding:12px 8px;border-top:1px solid var(--border);color:var(--muted);font-size:11px}
+  .sidefoot .plan{font-size:10px;letter-spacing:.1em;text-transform:uppercase}
+  .sidefoot .planv{color:var(--ink-2);font-size:12px;margin-top:2px}
+
+  /* main */
+  .main{flex:1;min-width:0;padding:24px clamp(16px,3vw,36px) 60px}
+  .topbar{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+  #ptitle{font-size:22px;font-weight:700;margin:0;letter-spacing:-.01em}
+  #psub{color:var(--muted);font-size:13px;margin-top:3px}
+  .daterange{display:flex;gap:8px;align-items:center}
+  .pill{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 12px;font-size:12px;color:var(--ink-2)}
+  .pill .lo{color:var(--muted)}
+  .envswitch{display:inline-flex;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:3px;gap:2px}
+  .envpill{background:transparent;border:0;color:var(--muted);font:inherit;font-size:12px;font-weight:600;padding:5px 12px;border-radius:7px;cursor:pointer}
+  .envpill:hover{color:var(--ink-2)}
+  .envpill.on{background:var(--accent);color:#fff}
+  #pmeta{font-size:11.5px;color:var(--muted);margin:-8px 0 18px;padding:9px 14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;line-height:1.5}
+  #pmeta b{color:var(--ink-2);font-weight:600}
+  #pmeta .mkpi{text-transform:uppercase;letter-spacing:.08em;font-size:9.5px;color:var(--muted)}
+  #pmeta .mnote{color:var(--warning)}
+  .early{display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:700;color:var(--warning);background:rgba(250,178,25,.12);border-radius:20px;padding:1px 6px;letter-spacing:.02em;text-transform:uppercase}
+
+  /* grid + cards */
+  .grid{display:grid;gap:14px;grid-template-columns:repeat(12,1fr);align-items:stretch;margin-bottom:14px}
+  .col-3{grid-column:span 3}.col-4{grid-column:span 4}.col-5{grid-column:span 5}.col-6{grid-column:span 6}.col-12{grid-column:span 12}
+  @media(max-width:1050px){.col-3{grid-column:span 6}.col-4,.col-5{grid-column:span 6}}
+  @media(max-width:620px){.grid>*{grid-column:span 12 !important}}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px 12px;display:flex;flex-direction:column;min-width:0}
+  .card .h{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+  .card .title{font-size:12.5px;color:var(--ink);font-weight:600;display:inline-flex;align-items:center;gap:6px;min-width:0}
+  .card .q{font-size:11px;color:var(--muted);margin:2px 0 8px}
+  .card .val{font-size:27px;font-weight:700;letter-spacing:-.02em}
+  .card .val .u{font-size:13px;color:var(--muted);font-weight:600;margin-left:3px}
+  .card .sub{font-size:11px;color:var(--muted);margin-top:4px}
+  .kpi .kpirow{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:2px}
+  .qm{flex:none;width:15px;height:15px;border-radius:50%;border:1px solid var(--border);color:var(--muted);font-size:9.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;cursor:help;line-height:1;user-select:none}
+  .qm:hover{color:var(--ink);border-color:var(--muted)}
+
+  .slope{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap}
+  .slope.good{color:var(--good);background:rgba(12,163,12,.12)}
+  .slope.bad{color:#ff6a6a;background:rgba(208,59,59,.12)}
+  .slope.flat{color:var(--warning);background:rgba(250,178,25,.12)}
+
+  svg.chart{width:100%;height:100%;display:block;overflow:visible}
+  .chartbox{flex:1 1 auto;min-height:130px;position:relative;margin-top:4px}
+  .chartbox>svg.chart{position:absolute;inset:0}
+  svg text{fill:var(--muted);font-size:9px;font-family:inherit}
+  svg.spark{width:100%;height:40px;display:block;margin-top:8px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--ink-2);margin-top:8px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+
+  .hbars{display:flex;flex-direction:column;gap:8px;flex:1;justify-content:center;margin-top:6px}
+  .hbar{display:flex;align-items:center;gap:8px;font-size:11.5px}
+  .hbar .hbl{width:96px;flex:none;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hbar .hbt{flex:1;height:8px;background:var(--surface-2);border-radius:5px;overflow:hidden}
+  .hbar .hbt i{display:block;height:100%;background:linear-gradient(90deg,var(--series),#2a6fc0);border-radius:5px}
+  .hbar .hbv{width:34px;flex:none;text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
+
+  .funnel{flex:1;display:flex;flex-direction:column;justify-content:center}
+  .funnel .row{display:flex;align-items:center;gap:10px;margin:5px 0}
+  .funnel .bar{height:22px;border-radius:5px;background:linear-gradient(90deg,var(--series),#2a6fc0);display:flex;align-items:center;padding-left:9px;color:#fff;font-size:11.5px;font-weight:600;min-width:34px}
+  .funnel .lbl{width:110px;font-size:11px;color:var(--ink-2);flex:none;text-align:right}
+  .funnel .drop{font-size:10.5px;color:var(--muted);flex:none;width:56px}
+
+  table.ret{border-collapse:separate;border-spacing:3px;width:100%;margin-top:4px}
+  table.ret td,table.ret th{text-align:center;font-size:10.5px;padding:5px 2px;border-radius:4px;font-variant-numeric:tabular-nums}
+  table.ret th{color:var(--muted);font-weight:600}
+  table.ret td.coh{color:var(--ink-2);text-align:right;padding-right:8px;white-space:nowrap}
+  table.ret td.cell{color:var(--ink)}
+  table.ret td.w4{outline:1px solid rgba(208,59,59,.5)}
+
+  .mini{display:flex;flex-direction:column;gap:9px;flex:1;justify-content:center;margin-top:4px}
+  .mini .mrow{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--ink-2);border-bottom:1px solid var(--border);padding-bottom:8px}
+  .mini .mrow:last-child{border:0}
+  .mini b{font-variant-numeric:tabular-nums}
+  .mini b.ok{color:var(--good)} .mini b.warn{color:var(--warning)} .mini b.muted{color:var(--muted);font-weight:500;font-size:11px}
+
+  .card.banner{display:block;background:linear-gradient(180deg,rgba(57,135,229,.09),transparent);border-color:rgba(57,135,229,.32);font-size:12.5px;color:var(--ink-2);line-height:1.6}
+  .card.banner b{color:var(--ink)}
+  table.ftbl{width:100%;border-collapse:collapse;margin-top:6px;font-size:12px}
+  table.ftbl th{text-align:left;color:var(--muted);font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;padding:6px 8px;border-bottom:1px solid var(--border)}
+  table.ftbl td{padding:7px 8px;border-bottom:1px solid var(--border);color:var(--ink-2);font-variant-numeric:tabular-nums}
+  table.ftbl td.ft{color:var(--ink)}
+  table.ftbl tr:last-child td{border-bottom:0}
+  .notyet{display:flex;flex-direction:column;gap:8px;margin-top:8px;flex:1;justify-content:center}
+  .notyet .ny{display:flex;flex-direction:column;gap:1px;border-bottom:1px solid var(--border);padding-bottom:8px}
+  .notyet .ny:last-child{border:0}
+  .notyet .ny b{font-size:12.5px;color:var(--ink)}
+  .notyet .ny span{font-size:11px;color:var(--muted)}
+
+  .stubbadge{display:inline-block;font-size:13px;font-weight:700;padding:5px 12px;border-radius:9px;background:var(--surface-2);border:1px solid var(--border)}
+  .stublist{display:grid;grid-template-columns:repeat(2,1fr);gap:8px 20px}
+  @media(max-width:760px){.stublist{grid-template-columns:1fr}}
+  .stubrow{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--ink-2);padding:6px 0;border-bottom:1px solid var(--border)}
+  .stubrow .sv{flex:none;width:auto}
+  .stubrow .sl{color:var(--ink)}
+
+  #tt{position:fixed;pointer-events:none;z-index:60;background:#000;border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:11.5px;color:var(--ink);opacity:0;transition:opacity .08s;box-shadow:0 6px 24px rgba(0,0,0,.5);white-space:nowrap}
+  #tt b{color:#fff} #tt .k{color:var(--muted)}
+</style>
+</head>
+<body>
+<div id="tt"></div>
+<div class="app">
+  <aside id="sidebar"></aside>
+  <main class="main">
+    <div class="topbar">
+      <div><h1 id="ptitle">Overview</h1><div id="psub"></div></div>
+      <div class="daterange">
+        <div id="envswitch" class="envswitch"></div>
+      </div>
+    </div>
+    <div id="pmeta"></div>
+    <div id="content"></div>
+  </main>
+</div>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
