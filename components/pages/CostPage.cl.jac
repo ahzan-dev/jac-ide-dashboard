@@ -51,7 +51,7 @@ def:pub CostPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxE
 
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Total spend" data={data["total_spend"]} loading={loading} /></div>
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Cost / request" data={data["cost_per_request"]} loading={loading} /></div>
-        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Cost / active user" data={data["cost_per_user"]} loading={loading} /></div>
+        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Cost / spender" data={data["cost_per_user"]} loading={loading} /></div>
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StaticStat title="Gross margin" value={margin_txt} note={margin_note} definition="(MRR − metered cost) ÷ MRR." /></div>
 
         <div className="col-span-12 lg:col-span-5"><BarsTile title="Model mix (proxy)" data={data["model_mix"]} loading={loading} /></div>

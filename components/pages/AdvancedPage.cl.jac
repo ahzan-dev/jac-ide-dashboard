@@ -32,10 +32,10 @@ def:pub AdvancedPage(env: str, date_from: str, date_to: str, refresh_n: int) -> 
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StaticStat title="AI insights" value="—" note="byLLM one-shot summary (planned) — will be labelled 'generated'." definition="LLM-authored narrative over the metrics." /></div>
 
         <div className="col-span-12 lg:col-span-8"><StackBarTile title="User lifecycle" data={data["lifecycle"]} loading={loading} /></div>
-        <div className="col-span-12 lg:col-span-4"><FunnelTile title="User-journey flow" data={data["funnel"]} loading={loading} /></div>
+        <div className="col-span-12 lg:col-span-4"><FunnelTile title="Activation funnel" data={data["funnel"]} loading={loading} /></div>
 
-        <div className="col-span-12 lg:col-span-6"><BarsTile title="Failure-pattern detection" data={data["ai_fail_reasons"]} loading={loading} /></div>
-        <div className="col-span-12 lg:col-span-6"><AreaTile title="Usage forecast (naive)" data={data["daily_ai"]} loading={loading} /></div>
+        <div className="col-span-12 lg:col-span-6"><BarsTile title="Top failure reasons" data={data["ai_fail_reasons"]} loading={loading} /></div>
+        <div className="col-span-12 lg:col-span-6"><AreaTile title="AI volume (daily)" data={data["daily_ai"]} loading={loading} /></div>
 
         <div className="col-span-12"><HogqlBox /></div>
     </div>;

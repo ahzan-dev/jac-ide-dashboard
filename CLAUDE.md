@@ -163,3 +163,18 @@ Tiles in `components/dash/ChartTiles.cl.jac` (+ `StatTile`). Pick by job, NOT by
   - **Production hardening TODO**: (1) set `[plugins.scale.jwt] secret` (default is the insecure test key —
     anyone can forge tokens); (2) move the admin password out of the seed command into a secret / rotate it;
     (3) optionally gate to jac-scale role `admin` (provision via `/admin`) instead of "any registered user".
+  - User DB persists in `.jac/data/` (SQLite: `main.db`); the admin survives normal restarts. If it's wiped
+    (e.g. `jac clean`/`.jac` reset), re-seed with the `/user/register` one-liner above.
+
+## Post-Phase-4 additions (all verified in browser; see PROGRESS.md)
+- **Compare-to-previous**: each scalar also queries the prior equal-length window → `prev`/`delta`; StatTile +
+  GaugeTile show "±% vs prev" (falls back to weekly slope when the prev window has no data).
+- **Calendar date range**: top-bar native `<input type=date>` × 2 (Popover/Calendar freeze — avoid them).
+  Server takes `date_from`/`date_to`; derives previous-window + an **adaptive `{bkt}`** (`toDate` ≤31d ·
+  `toStartOfWeek` ≤186d · `toStartOfMonth` beyond). Trends follow the range; retention/lifecycle keep cohort windows.
+- **Lifecycle** tile (native LifecycleQuery, stacked bar) on Advanced; **deploy** intent + honest success-rate
+  on System Health; real **`billing_sv.jac`** Stripe MRR→margin on Cost (honest "—" without a key).
+- **Data dictionary** (searchable 26-event table) + **saved views** (localStorage chips) on Settings/top bar.
+- **Chart polish**: Y-axis no longer clipped (margin), hbar labels moved above bars (no truncation).
+- **Cleanup**: removed dead `StubPage`, `STUB_NOTES`, `_W10`; all 11 pages route to real components (Settings is
+  the routing fallback).

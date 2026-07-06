@@ -27,7 +27,7 @@ def:pub UsersPage(env: str, date_from: str, date_to: str, refresh_n: int) -> Jsx
     }
 
     return <div className="grid grid-cols-12 gap-4">
-        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Registered" data={data["signups_total"]} loading={loading} /></div>
+        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Signups (180d)" data={data["signups_total"]} loading={loading} /></div>
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Active builders" data={data["active_builders"]} loading={loading} /></div>
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="New signups" data={data["new_signups"]} loading={loading} /></div>
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Activation" data={data["activation"]} loading={loading} /></div>
@@ -36,7 +36,7 @@ def:pub UsersPage(env: str, date_from: str, date_to: str, refresh_n: int) -> Jsx
         <div className="col-span-12 sm:col-span-6 lg:col-span-4"><AreaTile title="Returning users (weekly)" data={data["returning_weekly"]} loading={loading} /></div>
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><DonutTile title="Signup method" data={data["signup_method"]} loading={loading} /></div>
 
-        <div className="col-span-12 lg:col-span-4"><FunnelTile title="Onboarding funnel" data={data["funnel"]} loading={loading} /></div>
+        <div className="col-span-12 lg:col-span-4"><FunnelTile title="Activation funnel" data={data["funnel"]} loading={loading} /></div>
         <div className="col-span-12 lg:col-span-5"><RetentionTile title="Retention cohort" data={data["retention"]} loading={loading} /></div>
         <div className="col-span-12 lg:col-span-3"><StatTile title="Went silent (60d)" data={data["churn_risk"]} loading={loading} /></div>
     </div>;

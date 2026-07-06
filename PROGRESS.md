@@ -82,6 +82,7 @@ Runs locally: `~/.jacvenv/bin/jac start main.jac --port=8000` (see CLAUDE.md "De
       in a bar under the top bar (`components/dash/SavedViews.cl.jac`)
 
 ### 5. Known issues / tech debt
+- [x] Dead-code cleanup — removed unreachable `StubPage`, `STUB_NOTES`, unused `_W10` glob (all 11 pages are real)
 - [ ] Native `jac check metrics_sv.jac` intermittently flags E1032 on redis/requests (runtime fine; split/annotate)
 - [ ] Runs on `~/.jacvenv` jac 0.16.7, not native (native scale-serve broken in this build) — version-drift risk
 - [ ] Radial gauges replaced by linear meters (recharts 3.x radial scaling broken) — revisit if circular look wanted

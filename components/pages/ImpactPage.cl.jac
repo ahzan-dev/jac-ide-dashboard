@@ -2,7 +2,7 @@ sv import from ...metrics_sv { metrics_batch }
 import from ..dash.StatTile { StatTile }
 import from ..dash.ChartTiles { LineTile, AreaTile, StaticStat, Banner }
 
-glob IMPACT_KEYS: list = ["kept_rate", "code_produced", "gen_success_weekly", "files_changed_weekly"];
+glob IMPACT_KEYS: list = ["kept_rate", "code_produced", "kept_weekly", "files_changed_weekly"];
 
 def:pub ImpactPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxElement {
     has data: dict = {};
@@ -40,7 +40,7 @@ def:pub ImpactPage(env: str, date_from: str, date_to: str, refresh_n: int) -> Js
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StaticStat title="Est. hours saved" value={hours_txt} note="Estimate only: ~2 min saved per changed file. Not a measured value." definition="Rough productivity proxy from files_changed × a constant." /></div>
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StaticStat title="Est. ROI" value="—" note="Needs revenue (Stripe) to compute return; not in PostHog." definition="Value delivered ÷ cost." /></div>
 
-        <div className="col-span-12 lg:col-span-6"><LineTile title="Acceptance proxy trend" data={data["gen_success_weekly"]} loading={loading} /></div>
+        <div className="col-span-12 lg:col-span-6"><LineTile title="Acceptance proxy trend" data={data["kept_weekly"]} loading={loading} /></div>
         <div className="col-span-12 lg:col-span-6"><AreaTile title="Code produced trend" data={data["files_changed_weekly"]} loading={loading} /></div>
 
         <div className="col-span-12"><Banner text="Honest scope — only acceptance proxy (revert-based) and code-produced (files_changed) are measured. Hours-saved / ROI are estimates until a per-file accept event (generation_kept) + Stripe revenue exist." /></div>

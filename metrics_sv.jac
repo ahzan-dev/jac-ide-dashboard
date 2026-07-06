@@ -148,9 +148,8 @@ obj Metric {
     has readiness: str = "green";
 }
 
-# Common time predicates injected via {env_filter} / {from} / {to}.
+# Common time predicate injected via {from} / {to} (alongside {env_filter} and the {bkt} bucket).
 glob _RANGE: str = "AND timestamp >= toDateTime('{from}') AND timestamp < toDateTime('{to}')";
-glob _W10: str = "AND timestamp > now() - INTERVAL 10 WEEK";
 
 glob METRICS: dict[str, Metric] = {
     # ---- scalars / KPIs -------------------------------------------------
@@ -162,7 +161,7 @@ glob METRICS: dict[str, Metric] = {
         caveat="Prod is identified by a $host allowlist (prod does not yet emit the 'environment' super-property)."
     ),
     "signups_total": Metric(
-        key="signups_total", title="Registered", unit="", window="last 180 days",
+        key="signups_total", title="Signups (180d)", unit="", window="last 180 days",
         definition="Distinct signups (`auth_signup_succeeded`) over the last 180 days.",
         sql="SELECT count() FROM events WHERE event='auth_signup_succeeded' {env_filter} AND timestamp > now() - INTERVAL 180 DAY",
         spark="SELECT {bkt}(timestamp) wk, count() n FROM events WHERE event='auth_signup_succeeded' {env_filter} " + _RANGE + " GROUP BY wk ORDER BY wk"
@@ -217,6 +216,7 @@ glob METRICS: dict[str, Metric] = {
     ),
     "churn_risk": Metric(
         key="churn_risk", title="Went silent (60d)", unit="",
+        window="rolling: active 15-60d ago, silent last 14d",
         definition="Persons active 15–60 days ago who have NOT been active in the last 14 days.",
         sql="SELECT count(DISTINCT person_id) FROM events WHERE person_id IN (SELECT person_id FROM events WHERE timestamp >= now()-INTERVAL 60 DAY AND timestamp < now()-INTERVAL 15 DAY {env_filter} GROUP BY person_id) AND person_id NOT IN (SELECT person_id FROM events WHERE timestamp > now()-INTERVAL 14 DAY {env_filter} GROUP BY person_id)",
         good_when_up=False
@@ -324,7 +324,7 @@ glob METRICS: dict[str, Metric] = {
         sql="SELECT round(avg(toFloat64OrNull(toString(properties.cost_usd))),4) FROM events WHERE event='ai_generation_metered' {env_filter} " + _RANGE
     ),
     "cost_per_user": Metric(
-        key="cost_per_user", title="Cost / active user", unit="$",
+        key="cost_per_user", title="Cost / spender", unit="$",
         definition="Σ cost_usd ÷ distinct spenders over the window.",
         caveat="Awaiting POSTHOG_PROJECT_TOKEN on the prod pod.",
         sql="SELECT round(sum(toFloat64OrNull(toString(properties.cost_usd)))/nullIf(count(DISTINCT person_id),0),2) FROM events WHERE event='ai_generation_metered' {env_filter} " + _RANGE
@@ -335,6 +335,12 @@ glob METRICS: dict[str, Metric] = {
         key="revert_weekly", title="Revert rate trend", shape="series", unit="%", window="", good_when_up=False,
         definition="`ai_message_reverted` ÷ `ai_message_completed`, weekly.",
         sql="SELECT {bkt}(timestamp) wk, round(100.0*countIf(event='ai_message_reverted')/nullIf(countIf(event='ai_message_completed'),0),1) pct FROM events WHERE event IN ('ai_message_completed','ai_message_reverted') {env_filter} " + _RANGE + " GROUP BY wk ORDER BY wk"
+    ),
+    "kept_weekly": Metric(
+        key="kept_weekly", title="Kept rate trend", shape="series", unit="%", window="",
+        definition="(`ai_message_completed` − `ai_message_reverted`) ÷ `ai_message_completed`, per bucket — the revert signal inverted.",
+        caveat="Weak proxy: 'not reverted' ≠ 'kept'. Replaced by generation_kept once it ships.",
+        sql="SELECT {bkt}(timestamp) wk, round(100.0*(countIf(event='ai_message_completed')-countIf(event='ai_message_reverted'))/nullIf(countIf(event='ai_message_completed'),0),1) pct FROM events WHERE event IN ('ai_message_completed','ai_message_reverted') {env_filter} " + _RANGE + " GROUP BY wk ORDER BY wk"
     ),
     "files_changed_weekly": Metric(
         key="files_changed_weekly", title="Code produced trend", shape="series", unit="files", window="",

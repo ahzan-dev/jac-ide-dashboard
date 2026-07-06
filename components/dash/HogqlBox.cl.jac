@@ -5,7 +5,7 @@ import from ..ui.button { Button }
 import from ..ui.table { Table, TableHeader, TableBody, TableRow, TableHead, TableCell }
 
 def:pub HogqlBox() -> JsxElement {
-    has sql: str = "SELECT event, count() AS n FROM events\nWHERE timestamp > now() - INTERVAL 7 DAY\nGROUP BY event ORDER BY n DESC LIMIT 20";
+    has sql: str = "SELECT event, count() AS n FROM events\nWHERE timestamp > now() - INTERVAL 7 DAY AND (properties.environment = 'prod' OR properties.$host IN ('jachammer.ai','www.jachammer.ai','jac-builder.jaseci.org'))\nGROUP BY event ORDER BY n DESC LIMIT 20";
     has cols: list = [];
     has rows: list = [];
     has err: str = "";
@@ -38,6 +38,7 @@ def:pub HogqlBox() -> JsxElement {
         <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Free-form HogQL (read-only)</CardTitle>
             <CardDescription className="text-xs">Admin escape hatch — runs server-side against PostHog project 425465. SELECT / WITH only; the phx_ key never reaches the browser.</CardDescription>
+            <CardDescription className="text-xs">Unlike the tiles, ad-hoc SQL is NOT auto-filtered by environment — keep the prod clause in your WHERE to match tile numbers.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
             <Textarea value={sql} onChange={on_change} className="min-h-28 font-mono text-xs" spellCheck={False} />

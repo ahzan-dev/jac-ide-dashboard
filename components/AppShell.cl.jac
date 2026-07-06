@@ -18,7 +18,6 @@ import from .pages.FeedbackPage { FeedbackPage }
 import from .pages.ImpactPage { ImpactPage }
 import from .pages.CostPage { CostPage }
 import from .pages.SettingsPage { SettingsPage }
-import from .pages.StubPage { StubPage }
 import from .dash.DateRangePicker { DateRangePicker }
 import from .dash.SavedViews { SavedViews }
 import from .dash.util { iso_days_ago, iso_tomorrow }
@@ -53,18 +52,6 @@ glob PAGE_TITLES: dict = {
     "feedback": "Feedback & Roadmap", "requests": "AI Requests", "quality": "AI Quality",
     "advanced": "Advanced Analytics", "impact": "Developer Impact", "cost": "Cost & Usage",
     "health": "System Health", "settings": "Settings & Data"
-};
-
-glob STUB_NOTES: dict = {
-    "features": "Feature adoption + a per-surface completion table. Backing events are live; wiring in Phase 2.",
-    "feedback": "🔴 No explicit feedback system exists yet. Needs ai_response_rated / ai_issue_reported (PR #607) + external NPS/tickets.",
-    "requests": "Volume, per-user rate, prompt/response length, requests-per-day, peak hours, failure reasons. All live 🟢 — Phase 2.",
-    "quality": "🔴 Biggest gap — zero explicit quality signal until ai_response_rated (thumbs) flows. Revert-rate proxy only for now.",
-    "advanced": "Rule-based analytics: anomaly baseline (±2σ), churn-risk, journey funnel, forecast, and a free-form admin HogQL box. Phase 2.",
-    "impact": "Kept + files-changed are measured; hours-saved / ROI are estimates (needs a per-file accept event + Stripe). Phase 3.",
-    "cost": "⏳ Awaiting POSTHOG_PROJECT_TOKEN on the prod pod — ai_generation_metered = 0 rows until then. Margin/runway need Stripe.",
-    "health": "AI latency, preview reliability, JS errors are live 🟢. True uptime needs an external probe; infra via jac-scale Prometheus.",
-    "settings": "Env switcher, date range, cache refresh, privacy/access controls, and the rendered EVENT_CATALOG data dictionary. Phase 2."
 };
 
 def NavButton(label: str, dot: str, page: str, active: bool, on_select: Callable[[str], None]) -> JsxElement {
@@ -200,10 +187,8 @@ def:pub AppShell(on_logout: Callable[[], None]) -> JsxElement {
                         <ImpactPage env={env} date_from={date_from} date_to={date_to} refresh_n={refresh_n} />
                     } elif active_page == "cost" {
                         <CostPage env={env} date_from={date_from} date_to={date_to} refresh_n={refresh_n} />
-                    } elif active_page == "settings" {
-                        <SettingsPage env={env} date_from={date_from} date_to={date_to} refresh_n={refresh_n} />
                     } else {
-                        <StubPage title={page_title} readiness="planned" note={str(STUB_NOTES[active_page])} />
+                        <SettingsPage env={env} date_from={date_from} date_to={date_to} refresh_n={refresh_n} />
                     }}
                 </main>
             </SidebarInset>
