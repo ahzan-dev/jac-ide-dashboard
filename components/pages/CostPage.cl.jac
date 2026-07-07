@@ -30,24 +30,31 @@ def:pub CostPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxE
     mrv = mr["value"] if mr else None;
     metered_txt = str(mrv) if mrv is not None else "…";
 
-    # Margin from Stripe MRR (when available) vs metered spend.
+    # Margin = (MRR − metered spend) ÷ MRR. Compute a real % ONLY when BOTH halves
+    # exist — missing metered spend must NOT be treated as 0 (that reads as a false 100%).
     avail = (billing["available"] as bool) if billing else False;
     mrr = billing["mrr"] if billing else None;
+    subs = billing["active_subs"] if billing else 0;
     ts = data["total_spend"] if data else None;
     spend = ts["value"] if ts else None;
     margin_txt = "—";
     margin_note = "Needs tier prices (Stripe) vs metered cost. Prices live in Stripe, not code.";
     if avail and (mrr is not None) and ((mrr as float) > 0.0) {
         m = mrr as float;
-        sp = (spend as float) if (spend is not None) else 0.0;
-        margin_txt = str(int(round((m - sp) / m * 100.0))) + "%";
-        margin_note = "Live: MRR $" + str(mrr) + " − metered spend (Stripe + PostHog).";
+        if spend is not None {
+            sp = spend as float;
+            margin_txt = str(int(round((m - sp) / m * 100.0))) + "%";
+            margin_note = "Live: MRR $" + str(mrr) + "/mo − metered spend $" + str(spend) + " (selected window).";
+        } else {
+            margin_txt = "—";
+            margin_note = "MRR is live ($" + str(mrr) + "/mo, " + str(subs) + " active subs), but metered cost isn't captured on prod yet — a real margin can't be computed (treating missing cost as 0 would show a false 100%).";
+        }
     } elif billing {
         margin_note = str(billing["reason"]);
     }
 
     return <div className="grid grid-cols-12 gap-4">
-        <div className="col-span-12"><Banner text={"⏳ Cost pipeline (ai_generation_metered) is instrumented but needs POSTHOG_PROJECT_TOKEN on the prod pod. Metered rows in project (90d): " + metered_txt + ". Prod cost tiles read n/a until the token ships; dev/preview may show partial data. Revenue-side (margin/runway) needs Stripe."} /></div>
+        <div className="col-span-12"><Banner text={"Revenue is live — Stripe MRR now feeds the Gross-margin tile. Cost side is still partial: ai_generation_metered has started emitting, but the rows aren't tagged environment='prod' (nor a prod $host), so the prod env-filter excludes them and the spend tiles read n/a. Prod-filtered metered rows (90d): " + metered_txt + ". Fix: stamp the backend metered event with environment (or add its host to the prod allowlist) — then Total spend / Cost-per tiles and a real margin light up."} /></div>
 
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Total spend" data={data["total_spend"]} loading={loading} /></div>
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Cost / request" data={data["cost_per_request"]} loading={loading} /></div>
