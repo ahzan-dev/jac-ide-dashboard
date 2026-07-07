@@ -27,17 +27,17 @@ def:pub UsersPage(env: str, date_from: str, date_to: str, refresh_n: int) -> Jsx
     }
 
     return <div className="grid grid-cols-12 gap-4">
-        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Signups (180d)" data={data["signups_total"]} loading={loading} /></div>
+        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Signups (last 6 months)" data={data["signups_total"]} loading={loading} /></div>
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Active builders" data={data["active_builders"]} loading={loading} /></div>
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="New signups" data={data["new_signups"]} loading={loading} /></div>
-        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Activation" data={data["activation"]} loading={loading} /></div>
+        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="New users who got a result" data={data["activation"]} loading={loading} /></div>
 
-        <div className="col-span-12 lg:col-span-5"><AreaTile title="User growth (reach)" data={data["active_weekly"]} loading={loading} /></div>
-        <div className="col-span-12 sm:col-span-6 lg:col-span-4"><AreaTile title="Returning users (weekly)" data={data["returning_weekly"]} loading={loading} /></div>
-        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><DonutTile title="Signup method" data={data["signup_method"]} loading={loading} /></div>
+        <div className="col-span-12 lg:col-span-5"><AreaTile title="User growth (all visitors)" data={data["active_weekly"]} loading={loading} /></div>
+        <div className="col-span-12 sm:col-span-6 lg:col-span-4"><AreaTile title="Returning users" data={data["returning_weekly"]} loading={loading} /></div>
+        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><DonutTile title="How people sign up" data={data["signup_method"]} loading={loading} /></div>
 
-        <div className="col-span-12 lg:col-span-4"><FunnelTile title="Activation funnel" data={data["funnel"]} loading={loading} /></div>
-        <div className="col-span-12 lg:col-span-5"><RetentionTile title="Retention cohort" data={data["retention"]} loading={loading} /></div>
-        <div className="col-span-12 lg:col-span-3"><StatTile title="Went silent (60d)" data={data["churn_risk"]} loading={loading} /></div>
+        <div className="col-span-12 lg:col-span-4"><FunnelTile title="New-user journey" data={data["funnel"]} loading={loading} /></div>
+        <div className="col-span-12 lg:col-span-5"><RetentionTile title="Retention over time" data={data["retention"]} loading={loading} /></div>
+        <div className="col-span-12 lg:col-span-3"><StatTile title="Accounts at risk (60 days)" data={data["churn_risk"]} loading={loading} /></div>
     </div>;
 }

@@ -163,69 +163,69 @@ glob METRICS: dict[str, Metric] = {
     # ---- scalars / KPIs -------------------------------------------------
     "new_signups": Metric(
         key="new_signups", title="New signups", unit="",
-        definition="Count of `auth_signup_succeeded` events in the selected window and environment.",
+        definition="How many people signed up for an account in the selected date range.",
         sql="SELECT count() FROM events WHERE event = 'auth_signup_succeeded' {env_filter} " + _RANGE,
         spark="SELECT {bkt}(timestamp) wk, count() n FROM events WHERE event='auth_signup_succeeded' {env_filter} " + _RANGE + " GROUP BY wk ORDER BY wk",
-        caveat="Prod is identified by a $host allowlist (prod does not yet emit the 'environment' super-property)."
+        caveat=""
     ),
     "signups_total": Metric(
-        key="signups_total", title="Signups (180d)", unit="", window="last 180 days",
-        definition="Distinct signups (`auth_signup_succeeded`) over the last 180 days.",
+        key="signups_total", title="Signups (last 6 months)", unit="", window="last 180 days",
+        definition="Total number of new sign-ups over the last 6 months.",
         sql="SELECT count() FROM events WHERE event='auth_signup_succeeded' {env_filter} AND timestamp > now() - INTERVAL 180 DAY",
         spark="SELECT {bkt}(timestamp) wk, count() n FROM events WHERE event='auth_signup_succeeded' {env_filter} " + _RANGE + " GROUP BY wk ORDER BY wk"
     ),
     "active_builders": Metric(
         key="active_builders", title="Active builders", unit="",
-        definition="Distinct persons who did a CORE action (ai_message_sent, preview_ready or project_created) in the window. NOT 'any event'.",
+        definition="Unique users who did something meaningful — sent an AI request, previewed a project, or created one — in this period. Just visiting doesn't count.",
         sql="SELECT count(DISTINCT person_id) FROM events WHERE event IN ('ai_message_sent','preview_ready','project_created') {env_filter} " + _RANGE,
         spark="SELECT {bkt}(timestamp) wk, count(DISTINCT person_id) n FROM events WHERE event IN ('ai_message_sent','preview_ready','project_created') {env_filter} " + _RANGE + " GROUP BY wk ORDER BY wk"
     ),
     "ai_requests": Metric(
         key="ai_requests", title="AI requests", unit="",
-        definition="Count of `ai_message_sent` in the window.",
+        definition="How many times users asked the AI to build or change something.",
         sql="SELECT count() FROM events WHERE event='ai_message_sent' {env_filter} " + _RANGE,
         spark="SELECT {bkt}(timestamp) wk, count() n FROM events WHERE event='ai_message_sent' {env_filter} " + _RANGE + " GROUP BY wk ORDER BY wk"
     ),
     "median_response": Metric(
-        key="median_response", title="Median response", unit="s",
-        definition="Median `ai_message_completed.duration_ms` (seconds). Median, not mean — a power-user tail skews the average.",
+        key="median_response", title="Typical response time", unit="s",
+        definition="How long a typical AI request takes to finish, in seconds.",
         sql="SELECT round(median(toFloat64OrNull(toString(properties.duration_ms)))/1000,1) FROM events WHERE event='ai_message_completed' {env_filter} " + _RANGE,
         spark="SELECT {bkt}(timestamp) wk, round(median(toFloat64OrNull(toString(properties.duration_ms)))/1000,1) v FROM events WHERE event='ai_message_completed' {env_filter} " + _RANGE + " GROUP BY wk ORDER BY wk",
         good_when_up=False
     ),
     "code_produced": Metric(
         key="code_produced", title="Code produced", unit="files",
-        definition="Sum of `ai_message_completed.files_changed` in the window — primary 'work done' proxy.",
+        definition="Total files the AI changed for users — our best available stand-in for how much work got done.",
         sql="SELECT round(sum(toFloat64OrNull(toString(properties.files_changed)))) FROM events WHERE event='ai_message_completed' {env_filter} " + _RANGE,
         spark="SELECT {bkt}(timestamp) wk, round(sum(toFloat64OrNull(toString(properties.files_changed)))) v FROM events WHERE event='ai_message_completed' {env_filter} " + _RANGE + " GROUP BY wk ORDER BY wk"
     ),
     "activation": Metric(
-        key="activation", title="Activation", unit="%",
-        definition="Share of signups in the window who reached their first `ai_message_completed` (first successful build).",
+        key="activation", title="New users who got a result", unit="%",
+        definition="Percentage of new sign-ups who successfully got the AI to build something at least once.",
         sql="SELECT round(100.0*countIf(act)/nullIf(count(),0),1) FROM (SELECT person_id, minIf(timestamp, event='auth_signup_succeeded') su, countIf(event='ai_message_completed')>0 act FROM events WHERE event IN ('auth_signup_succeeded','ai_message_completed') {env_filter} GROUP BY person_id HAVING su >= toDateTime('{from}') AND su < toDateTime('{to}'))",
         spark="SELECT toStartOfWeek(su) wk, round(100.0*countIf(act)/nullIf(count(),0),1) v FROM (SELECT person_id, minIf(timestamp,event='auth_signup_succeeded') su, countIf(event='ai_message_completed')>0 act FROM events WHERE event IN ('auth_signup_succeeded','ai_message_completed') {env_filter} AND timestamp > now() - INTERVAL 14 WEEK GROUP BY person_id HAVING su > now() - INTERVAL 10 WEEK) GROUP BY wk ORDER BY wk"
     ),
     "gen_success": Metric(
-        key="gen_success", title="Gen success", unit="%",
-        definition="`ai_message_completed` ÷ `ai_message_sent` in the window.",
+        key="gen_success", title="AI success rate", unit="%",
+        definition="Percentage of AI requests that finished successfully.",
         sql="SELECT round(100.0*countIf(event='ai_message_completed')/nullIf(countIf(event='ai_message_sent'),0),1) FROM events WHERE event IN ('ai_message_sent','ai_message_completed') {env_filter} " + _RANGE
     ),
     "kept_rate": Metric(
-        key="kept_rate", title="Kept (not reverted)", unit="%",
-        definition="(completed − reverted) ÷ completed in the window.",
-        caveat="Weak proxy: 'not reverted' ≠ 'kept'. Replaced by generation_kept once it ships.",
+        key="kept_rate", title="Work kept (not undone)", unit="%",
+        definition="Percentage of AI-generated changes the user did NOT undo afterward.",
+        caveat="This is an estimate — a user not undoing a change isn't the same as approving it.",
         sql="SELECT round(100.0*(countIf(event='ai_message_completed')-countIf(event='ai_message_reverted'))/nullIf(countIf(event='ai_message_completed'),0),1) FROM events WHERE event IN ('ai_message_completed','ai_message_reverted') {env_filter} " + _RANGE
     ),
     "preview_reliability": Metric(
         key="preview_reliability", title="Preview reliability", unit="%",
-        definition="`preview_ready` ÷ `preview_start_requested` — a real per-start success rate.",
-        caveat="Warm/`was_prepared` previews succeed instantly and inflate this; small-N noise applies.",
+        definition="How often a project preview successfully loads when requested.",
+        caveat="Previews warmed up in the background load instantly and can flatter this; based on few events, so read as directional.",
         sql="SELECT round(100.0*countIf(event='preview_ready')/nullIf(countIf(event='preview_start_requested'),0),1) FROM events WHERE event IN ('preview_ready','preview_start_requested') {env_filter} " + _RANGE
     ),
     "churn_risk": Metric(
-        key="churn_risk", title="Went silent (60d)", unit="",
+        key="churn_risk", title="Users who've gone quiet", unit="",
         window="rolling: active 15-60d ago, silent last 14d",
-        definition="Persons active 15–60 days ago who have NOT been active in the last 14 days.",
+        definition="Users who were active a month or two ago but have had no activity in the last two weeks — a sign they may be leaving.",
         sql="SELECT count(DISTINCT person_id) FROM events WHERE person_id IN (SELECT person_id FROM events WHERE timestamp >= now()-INTERVAL 60 DAY AND timestamp < now()-INTERVAL 15 DAY {env_filter} GROUP BY person_id) AND person_id NOT IN (SELECT person_id FROM events WHERE timestamp > now()-INTERVAL 14 DAY {env_filter} GROUP BY person_id)",
         good_when_up=False
     ),
@@ -233,218 +233,218 @@ glob METRICS: dict[str, Metric] = {
     # ---- weekly trend series (line / bar) -------------------------------
     "active_weekly": Metric(
         key="active_weekly", title="User growth", shape="series", unit="users", window="",
-        definition="Distinct persons with ANY event per week (reach — includes logged-out visitors + bounces).",
+        definition="Total people who visited or used the product each week — includes casual and one-time visitors, not just engaged users.",
         sql="SELECT {bkt}(timestamp) wk, count(DISTINCT person_id) n FROM events WHERE true {env_filter} " + _RANGE + " GROUP BY wk ORDER BY wk"
     ),
     "gen_success_weekly": Metric(
-        key="gen_success_weekly", title="AI quality trend", shape="series", unit="%", window="",
-        definition="`ai_message_completed` ÷ `ai_message_sent`, weekly.",
+        key="gen_success_weekly", title="AI success rate over time", shape="series", unit="%", window="",
+        definition="Percentage of AI requests that finished successfully, week by week.",
         sql="SELECT {bkt}(timestamp) wk, round(100.0*countIf(event='ai_message_completed')/nullIf(countIf(event='ai_message_sent'),0),1) pct FROM events WHERE event IN ('ai_message_sent','ai_message_completed') {env_filter} " + _RANGE + " GROUP BY wk ORDER BY wk"
     ),
     "preview_reliability_weekly": Metric(
-        key="preview_reliability_weekly", title="Preview reliability", shape="series", unit="%", window="",
-        definition="`preview_ready` ÷ `preview_start_requested`, weekly.",
+        key="preview_reliability_weekly", title="Preview reliability over time", shape="series", unit="%", window="",
+        definition="How often preview requests loaded successfully, week by week.",
         sql="SELECT {bkt}(timestamp) wk, round(100.0*countIf(event='preview_ready')/nullIf(countIf(event='preview_start_requested'),0),1) pct FROM events WHERE event IN ('preview_ready','preview_start_requested') {env_filter} " + _RANGE + " GROUP BY wk ORDER BY wk"
     ),
 
     "latency_weekly": Metric(
-        key="latency_weekly", title="AI latency trend", shape="series", unit="s", window="",
-        definition="Median `ai_message_completed.duration_ms` (seconds), weekly.", good_when_up=False,
+        key="latency_weekly", title="Response time over time", shape="series", unit="s", window="",
+        definition="How long a typical AI request takes to finish, tracked week by week.", good_when_up=False,
         sql="SELECT {bkt}(timestamp) wk, round(median(toFloat64OrNull(toString(properties.duration_ms)))/1000,1) v FROM events WHERE event='ai_message_completed' {env_filter} " + _RANGE + " GROUP BY wk ORDER BY wk"
     ),
     "exception_weekly": Metric(
-        key="exception_weekly", title="JS error trend", shape="series", unit="errors", window="",
-        definition="`$exception` events per week (client-side JS errors; many blank = CORS redaction).", good_when_up=False,
+        key="exception_weekly", title="Website errors over time", shape="series", unit="errors", window="",
+        definition="Technical errors happening in users' browsers, week by week. Many show no detail due to browser privacy rules, but the count is real.", good_when_up=False,
         sql="SELECT {bkt}(timestamp) wk, count() n FROM events WHERE event='$exception' {env_filter} " + _RANGE + " GROUP BY wk ORDER BY wk"
     ),
     "requests_daily": Metric(
-        key="requests_daily", title="Requests per period", shape="series", unit="requests",
-        definition="`ai_message_sent` count per bucket (day/week/month by range length) over the window.",
+        key="requests_daily", title="AI requests over time", shape="series", unit="requests",
+        definition="Number of AI requests, grouped by day, week, or month depending on the date range selected.",
         sql="SELECT {bkt}(timestamp) d, count() n FROM events WHERE event='ai_message_sent' {env_filter} " + _RANGE + " GROUP BY d ORDER BY d"
     ),
     "peak_hours": Metric(
-        key="peak_hours", title="Peak usage hours (UTC)", shape="series", unit="requests",
-        definition="`ai_message_sent` by hour-of-day (UTC) over the window.",
+        key="peak_hours", title="Busiest hours of the day", shape="series", unit="requests",
+        definition="Number of AI requests during each hour of the day, so you can see when usage peaks. Hours are in world-standard time (UTC), not local time.",
         sql="SELECT toHour(timestamp) h, count() n FROM events WHERE event='ai_message_sent' {env_filter} " + _RANGE + " GROUP BY h ORDER BY h"
     ),
     "daily_ai": Metric(
-        key="daily_ai", title="AI volume", shape="series", unit="gens",
-        definition="`ai_message_completed` per bucket over the window (usage trend).",
+        key="daily_ai", title="AI usage volume", shape="series", unit="gens",
+        definition="Number of completed AI requests over time.",
         sql="SELECT {bkt}(timestamp) d, count() n FROM events WHERE event='ai_message_completed' {env_filter} " + _RANGE + " GROUP BY d ORDER BY d"
     ),
 
     # ---- more scalars ---------------------------------------------------
     "requests_per_active": Metric(
-        key="requests_per_active", title="Requests / active user", unit="",
-        definition="`ai_message_sent` ÷ distinct persons who sent one, over the window (avg per requesting user).",
+        key="requests_per_active", title="Requests per user", unit="",
+        definition="On average, how many AI requests each active user makes in this period.",
         sql="SELECT round(count() / nullIf(count(DISTINCT person_id), 0), 1) FROM events WHERE event='ai_message_sent' {env_filter} " + _RANGE
     ),
     "prompt_len": Metric(
-        key="prompt_len", title="Median prompt", unit="chars",
-        definition="Median `ai_message_sent.prompt_length` (characters) over the window.",
+        key="prompt_len", title="Typical request length", unit="chars",
+        definition="The typical length of what a user types when asking the AI for something.",
         sql="SELECT round(median(toFloat64OrNull(toString(properties.prompt_length)))) FROM events WHERE event='ai_message_sent' {env_filter} " + _RANGE
     ),
     "exception_total": Metric(
-        key="exception_total", title="JS errors", unit="", good_when_up=False,
-        definition="`$exception` events over the window (many blank = CORS redaction, not a bug).",
+        key="exception_total", title="Website errors", unit="", good_when_up=False,
+        definition="Total technical errors in users' browsers this period. Many show no detail due to browser privacy rules — not itself a sign of a bug.",
         sql="SELECT count() FROM events WHERE event='$exception' {env_filter} " + _RANGE
     ),
     "ai_baseline": Metric(
-        key="ai_baseline", title="Daily AI baseline", unit="gens/day", window="last 30 days",
-        definition="Mean `ai_message_completed` per day over the last 30 days (anomaly baseline).",
+        key="ai_baseline", title="Normal daily AI usage", unit="gens/day", window="last 30 days",
+        definition="Average completed AI requests per day over the last 30 days — a reference for what 'normal' looks like.",
         sql="SELECT round(avg(n)) FROM (SELECT toDate(timestamp) d, count() n FROM events WHERE event='ai_message_completed' {env_filter} AND timestamp > now() - INTERVAL 30 DAY GROUP BY d)"
     ),
 
     "failure_rate": Metric(
-        key="failure_rate", title="Failure rate", unit="%", good_when_up=False,
-        definition="`ai_message_failed` ÷ `ai_message_sent` over the window.",
+        key="failure_rate", title="AI failure rate", unit="%", good_when_up=False,
+        definition="Percentage of AI requests that failed to complete.",
         sql="SELECT round(100.0*countIf(event='ai_message_failed')/nullIf(countIf(event='ai_message_sent'),0),1) FROM events WHERE event IN ('ai_message_sent','ai_message_failed') {env_filter} " + _RANGE
     ),
     "revert_rate": Metric(
-        key="revert_rate", title="Revert rate", unit="%", good_when_up=False,
-        definition="`ai_message_reverted` ÷ `ai_message_completed` over the window (weak quality proxy).",
-        caveat="Proxy: user undid it ≠ user ignored it. Replaced by generation_kept once it ships.",
+        key="revert_rate", title="Undo rate", unit="%", good_when_up=False,
+        definition="Percentage of AI-generated changes users undid afterward.",
+        caveat="An estimate of quality, not a direct measure — undoing a change can mean many things.",
         sql="SELECT round(100.0*countIf(event='ai_message_reverted')/nullIf(countIf(event='ai_message_completed'),0),1) FROM events WHERE event IN ('ai_message_completed','ai_message_reverted') {env_filter} " + _RANGE
     ),
     "rating_ratio": Metric(
         key="rating_ratio", title="Helpful rate", unit="%",
-        definition="`ai_response_rated` up ÷ all ratings over the window.",
-        caveat="Needs ai_response_rated (thumbs) — ships with PR #607; empty until users rate.",
+        definition="Percentage of AI responses users rated as helpful, out of all responses they rated.",
+        caveat="This rating feature hasn't launched yet, so it reads empty until it does.",
         sql="SELECT round(100.0*countIf(toString(properties.rating)='up')/nullIf(count(),0),1) FROM events WHERE event='ai_response_rated' {env_filter} " + _RANGE
     ),
 
     # ---- cost (gated on POSTHOG_PROJECT_TOKEN → ai_generation_metered) ---
     "metered_rows": Metric(
-        key="metered_rows", title="Metered rows", unit="", window="last 90 days",
-        definition="Count of `ai_generation_metered` events (the cost pipeline). 0 = POSTHOG_PROJECT_TOKEN not on the prod pod.",
+        key="metered_rows", title="Cost-tracked AI runs", unit="", window="last 90 days",
+        definition="Number of AI runs with detailed cost data over the last 90 days.",
         sql="SELECT count() FROM events WHERE event='ai_generation_metered' {env_filter} AND timestamp > now() - INTERVAL 90 DAY"
     ),
     "total_spend": Metric(
-        key="total_spend", title="Total spend", unit="$",
-        definition="Σ `ai_generation_metered.cost_usd` (real metered $ from byLLM/litellm) over the window.",
-        caveat="Awaiting POSTHOG_PROJECT_TOKEN on the prod pod — 0 rows until then.",
+        key="total_spend", title="Total AI cost", unit="$",
+        definition="Total dollars spent on AI usage this period.",
+        caveat="Reads $0 until live cost-tracking is fully switched on — not that spend was actually zero.",
         sql="SELECT round(sum(toFloat64OrNull(toString(properties.cost_usd))),2) FROM events WHERE event='ai_generation_metered' {env_filter} " + _RANGE
     ),
     "cost_per_request": Metric(
-        key="cost_per_request", title="Cost / request", unit="$",
-        definition="Avg `ai_generation_metered.cost_usd` per generation over the window.",
-        caveat="Awaiting POSTHOG_PROJECT_TOKEN on the prod pod.",
+        key="cost_per_request", title="Cost per AI request", unit="$",
+        definition="Average dollar cost of one AI request.",
+        caveat="Reads $0 until live cost-tracking is fully switched on.",
         sql="SELECT round(avg(toFloat64OrNull(toString(properties.cost_usd))),4) FROM events WHERE event='ai_generation_metered' {env_filter} " + _RANGE
     ),
     "cost_per_user": Metric(
-        key="cost_per_user", title="Cost / spender", unit="$",
-        definition="Σ cost_usd ÷ distinct spenders over the window.",
-        caveat="Awaiting POSTHOG_PROJECT_TOKEN on the prod pod.",
+        key="cost_per_user", title="Cost per active user", unit="$",
+        definition="Average dollar cost per user who generated AI usage.",
+        caveat="Reads $0 until live cost-tracking is fully switched on.",
         sql="SELECT round(sum(toFloat64OrNull(toString(properties.cost_usd)))/nullIf(count(DISTINCT person_id),0),2) FROM events WHERE event='ai_generation_metered' {env_filter} " + _RANGE
     ),
 
     # ---- more weekly series ---------------------------------------------
     "revert_weekly": Metric(
-        key="revert_weekly", title="Revert rate trend", shape="series", unit="%", window="", good_when_up=False,
-        definition="`ai_message_reverted` ÷ `ai_message_completed`, weekly.",
+        key="revert_weekly", title="Undo rate over time", shape="series", unit="%", window="", good_when_up=False,
+        definition="Percentage of AI changes users undid, week by week.",
         sql="SELECT {bkt}(timestamp) wk, round(100.0*countIf(event='ai_message_reverted')/nullIf(countIf(event='ai_message_completed'),0),1) pct FROM events WHERE event IN ('ai_message_completed','ai_message_reverted') {env_filter} " + _RANGE + " GROUP BY wk ORDER BY wk"
     ),
     "kept_weekly": Metric(
-        key="kept_weekly", title="Kept rate trend", shape="series", unit="%", window="",
-        definition="(`ai_message_completed` − `ai_message_reverted`) ÷ `ai_message_completed`, per bucket — the revert signal inverted.",
-        caveat="Weak proxy: 'not reverted' ≠ 'kept'. Replaced by generation_kept once it ships.",
+        key="kept_weekly", title="Work kept over time", shape="series", unit="%", window="",
+        definition="Percentage of AI changes users did NOT undo, tracked over time.",
+        caveat="An estimate — not undoing isn't the same as approving.",
         sql="SELECT {bkt}(timestamp) wk, round(100.0*(countIf(event='ai_message_completed')-countIf(event='ai_message_reverted'))/nullIf(countIf(event='ai_message_completed'),0),1) pct FROM events WHERE event IN ('ai_message_completed','ai_message_reverted') {env_filter} " + _RANGE + " GROUP BY wk ORDER BY wk"
     ),
     "files_changed_weekly": Metric(
-        key="files_changed_weekly", title="Code produced trend", shape="series", unit="files", window="",
-        definition="Σ `ai_message_completed.files_changed`, weekly.",
+        key="files_changed_weekly", title="Files changed by AI over time", shape="series", unit="files", window="",
+        definition="Total files the AI changed for users, week by week.",
         sql="SELECT {bkt}(timestamp) wk, round(sum(toFloat64OrNull(toString(properties.files_changed)))) v FROM events WHERE event='ai_message_completed' {env_filter} " + _RANGE + " GROUP BY wk ORDER BY wk"
     ),
     "ai_requests_weekly": Metric(
-        key="ai_requests_weekly", title="AI volume (cost driver)", shape="series", unit="requests", window="",
-        definition="`ai_message_sent` per week.",
+        key="ai_requests_weekly", title="AI usage over time", shape="series", unit="requests", window="",
+        definition="AI requests made each week — the main driver of AI costs.",
         sql="SELECT {bkt}(timestamp) wk, count() n FROM events WHERE event='ai_message_sent' {env_filter} " + _RANGE + " GROUP BY wk ORDER BY wk"
     ),
 
     # ---- more breakdown rows --------------------------------------------
     "model_mix": Metric(
-        key="model_mix", title="Model mix (proxy)", shape="rows",
-        definition="`ai_model_switched_from_chat` by target model over the window — a PROXY for model usage.",
-        caveat="Proxy: counts model SWITCHES, not per-generation model. Real model is on ai_generation_metered (gated).",
+        key="model_mix", title="Which AI model people choose", shape="rows",
+        definition="How often users manually switch to each AI model — an estimate of popularity, not a direct usage count.",
+        caveat="Counts model switches, not which model ran each request; an exact breakdown comes with detailed cost-tracking.",
         sql="SELECT coalesce(nullIf(toString(properties.to),''),'unknown') model, count() n FROM events WHERE event='ai_model_switched_from_chat' {env_filter} " + _RANGE + " GROUP BY model ORDER BY n DESC LIMIT 8"
     ),
     "issue_categories": Metric(
-        key="issue_categories", title="Reported issues", shape="rows",
-        definition="`ai_issue_reported` by `category` over the window (inaccurate / incomplete / too slow / …).",
-        caveat="Ships with PR #607 — empty until users report issues in prod.",
+        key="issue_categories", title="Issues reported by users", shape="rows",
+        definition="Breakdown of problems users have reported about the AI, like 'inaccurate', 'incomplete', or 'too slow'.",
+        caveat="This feature hasn't launched yet, so it reads empty until users can report issues live.",
         sql="SELECT coalesce(nullIf(toString(properties.category),''),'unknown') category, count() n FROM events WHERE event='ai_issue_reported' {env_filter} " + _RANGE + " GROUP BY category ORDER BY n DESC LIMIT 8"
     ),
 
     # ---- breakdown rows (hbars / table) ---------------------------------
     "ai_fail_reasons": Metric(
         key="ai_fail_reasons", title="Top failure reasons", shape="rows",
-        definition="`ai_message_failed` grouped by `reason` over the window (mostly 504/timeout historically).",
+        definition="The most common reasons an AI request fails, such as taking too long and timing out.",
         sql="SELECT coalesce(nullIf(toString(properties.reason),''),'unknown') reason, count() n FROM events WHERE event='ai_message_failed' {env_filter} " + _RANGE + " GROUP BY reason ORDER BY n DESC LIMIT 8"
     ),
     "feature_table": Metric(
-        key="feature_table", title="Feature adoption", shape="rows",
-        definition="Distinct users per feature and adoption % (÷ active builders) over the window.",
-        caveat="Adoption denominator = active builders (core action). Several features are tier-gated.",
+        key="feature_table", title="Feature adoption (detail)", shape="rows",
+        definition="For each feature, how many users used it and what share of active users that represents.",
+        caveat="Share is out of actively-building users. Some features are paid-plan-only, so low numbers may reflect plan limits.",
         sql="SELECT event feature, count(DISTINCT person_id) users, round(100.0*count(DISTINCT person_id)/nullIf((SELECT count(DISTINCT person_id) FROM events WHERE event IN ('ai_message_sent','preview_ready','project_created') {env_filter} " + _RANGE + "),0),1) adoption_pct FROM events WHERE event IN ('ide_opened','project_created','preview_start_requested','ai_message_sent','git_commit_succeeded','github_connect_succeeded','project_shared','export_downloaded','deploy_sandbox_clicked','deploy_production_clicked') {env_filter} " + _RANGE + " GROUP BY feature ORDER BY users DESC LIMIT 15"
     ),
 
     # ---- breakdown rows (hbars / table) ---------------------------------
     "top_features": Metric(
-        key="top_features", title="Top features by usage", shape="rows",
-        definition="Distinct users per feature surface over the selected window.",
-        caveat="Several features are tier-gated (Free = 0 deploys, no folder-upload/community) — low ≠ low interest.",
+        key="top_features", title="Most-used features", shape="rows",
+        definition="How many unique users used each feature this period.",
+        caveat="Some features are paid-plan-only, so low numbers often reflect plan limits, not low interest.",
         sql="SELECT event, count(DISTINCT person_id) users FROM events WHERE event IN ('ide_opened','project_created','preview_start_requested','git_commit_succeeded','github_connect_succeeded','project_shared','export_downloaded','deploy_sandbox_clicked','deploy_production_clicked') {env_filter} " + _RANGE + " GROUP BY event ORDER BY users DESC LIMIT 10"
     ),
     "problem_areas": Metric(
         key="problem_areas", title="Top problem areas", shape="rows",
-        definition="Failures / friction over the selected window: AI failures, preview failures, and JS exceptions.",
+        definition="Where users hit the most friction: AI requests failing, previews failing to load, or errors in the browser.",
         sql="SELECT multiIf(event='ai_message_failed','AI generation failed', event='preview_start_failed','Preview failed to start', event='$exception','JS error (client)', event) area, count() n FROM events WHERE event IN ('ai_message_failed','preview_start_failed','$exception') {env_filter} " + _RANGE + " GROUP BY area ORDER BY n DESC LIMIT 8"
     ),
     "signup_method": Metric(
-        key="signup_method", title="Signup method", shape="rows",
-        definition="Signups by `auth_signup_succeeded.method` (password / google / github) over the selected window.",
-        caveat="Small-N; SSO methods populate only once OAuth signups occur in this env.",
+        key="signup_method", title="How people sign up", shape="rows",
+        definition="How new users create their account — password, Google, or GitHub.",
+        caveat="Based on few sign-ups so far; Google and GitHub only show data once people use those options here.",
         sql="SELECT coalesce(nullIf(toString(properties.method),''),'unknown') method, count(DISTINCT person_id) users FROM events WHERE event='auth_signup_succeeded' {env_filter} " + _RANGE + " GROUP BY method ORDER BY users DESC"
     ),
     "returning_weekly": Metric(
         key="returning_weekly", title="Returning users", shape="series", unit="users", window="",
-        definition="Users active in a week whose FIRST active week was earlier (i.e. they came back). New-vs-returning split is a Phase 2 grouped-bar upgrade.",
+        definition="Users who came back and used the product again in a later week, rather than using it just once.",
         sql="SELECT wk, uniqIf(person_id, wk!=first_wk) returning_users FROM (SELECT person_id, {bkt}(timestamp) wk, min({bkt}(timestamp)) OVER (PARTITION BY person_id) first_wk FROM events WHERE true {env_filter} " + _RANGE + ") GROUP BY wk ORDER BY wk"
     ),
 
     # ---- funnel ---------------------------------------------------------
     "funnel": Metric(
-        key="funnel", title="Activation funnel", shape="funnel",
-        definition="Distinct signups who EVER reached each step within the selected window (unordered 'reached step' funnel).",
+        key="funnel", title="New-user journey", shape="funnel",
+        definition="Of the people who signed up this period, how many went on to create a project, send an AI request, get a result, and preview it.",
         steps=["Signed up", "Created project", "Sent AI msg", "Got a build", "Previewed"],
         sql="WITH s AS (SELECT DISTINCT person_id FROM events WHERE event='auth_signup_succeeded' {env_filter} " + _RANGE + ") SELECT (SELECT count() FROM s) signed_up, countDistinct(if(event='project_created',person_id,NULL)) created_project, countDistinct(if(event='ai_message_sent',person_id,NULL)) sent_ai, countDistinct(if(event='ai_message_completed',person_id,NULL)) got_build, countDistinct(if(event='preview_ready',person_id,NULL)) previewed FROM events WHERE true {env_filter} " + _RANGE + " AND person_id IN (SELECT person_id FROM s)"
     ),
 
     # ---- deploy ---------------------------------------------------------
     "deploy_intent": Metric(
-        key="deploy_intent", title="Deploy intent", shape="rows",
-        definition="Deploy clicks by target (sandbox vs production) over the window.",
+        key="deploy_intent", title="Deploy attempts", shape="rows",
+        definition="How many times users clicked to deploy, split between a test version and the live public version.",
         sql="SELECT multiIf(event='deploy_sandbox_clicked','Sandbox', event='deploy_production_clicked','Production', event) target, count() n FROM events WHERE event IN ('deploy_sandbox_clicked','deploy_production_clicked') {env_filter} " + _RANGE + " GROUP BY target ORDER BY n DESC"
     ),
     "deploy_success": Metric(
         key="deploy_success", title="Deploy success rate", unit="%",
-        definition="`deploy_*_succeeded` ÷ (succeeded + failed) over the window.",
-        caveat="Success/failure events ship with PR #607 — n/a until deployed (intent clicks still fire).",
+        definition="Percentage of deploy attempts that actually succeeded.",
+        caveat="This tracking hasn't launched yet, so it shows 'not available' until it does.",
         sql="SELECT round(100.0*countIf(event IN ('deploy_sandbox_succeeded','deploy_production_succeeded'))/nullIf(countIf(event IN ('deploy_sandbox_succeeded','deploy_production_succeeded','deploy_sandbox_failed','deploy_production_failed')),0),1) FROM events WHERE event LIKE 'deploy_%' {env_filter} " + _RANGE
     ),
 
     # ---- lifecycle (native LifecycleQuery) ------------------------------
     "lifecycle": Metric(
         key="lifecycle", title="User lifecycle", shape="lifecycle", window="last 8 weeks",
-        definition="Weekly new / returning / resurrecting / dormant users (native LifecycleQuery on ai_message_completed). Dormant is drawn below the axis.",
-        caveat="Prod cohorts are small — read as directional."
+        definition="Each week, how many users are brand new, returning regularly, coming back after a break, or have gone quiet.",
+        caveat="Based on few live users so far — read the shape and direction, not exact counts."
     ),
 
     # ---- retention (native RetentionQuery) ------------------------------
     "retention": Metric(
-        key="retention", title="Retention cohort", shape="retention", window="signup-week cohorts, 6 weeks",
-        definition="Weekly cohorts by signup week; retained = did `ai_message_completed` in a later week. W4 is the headline 'leak' column.",
-        caveat="Small-N per cohort — read as directional. Cohorts <15 flagged.",
+        key="retention", title="Retention over time", shape="retention", window="signup-week cohorts, 6 weeks",
+        definition="Groups users by the week they signed up, then tracks the share still using the AI each following week. The 4-week mark shows who sticks around after a month.",
+        caveat="Based on small groups so far — treat the pattern as directional. Groups under 15 people are flagged as too small to trust.",
         good_when_up=True
     )
 };

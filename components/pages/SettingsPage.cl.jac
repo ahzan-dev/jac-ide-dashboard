@@ -35,7 +35,7 @@ glob ACCESS_LINES: list = [
 
 def:pub SettingsPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxElement {
     return <div className="grid grid-cols-12 gap-4">
-        <div className="col-span-12"><Banner text={"Controls live in the top bar and apply to every page: environment switcher (current: " + env + "), date range, and Refresh (busts the 10-minute server-side cache). Every query injects the environment filter; prod defaults on."} /></div>
+        <div className="col-span-12"><Banner text={"The controls at the top apply everywhere: the environment selector (currently: " + env + "), the date range, and a Refresh button (forces fresh data instead of the up-to-10-minute-old cached version). By default, every page shows only real production traffic, with test and dev data filtered out."} /></div>
 
         <div className="col-span-12 md:col-span-4"><InfoCard title="Privacy & masking" lines={PRIVACY_LINES} /></div>
         <div className="col-span-12 md:col-span-4"><InfoCard title="Data controls" lines={DATA_LINES} /></div>

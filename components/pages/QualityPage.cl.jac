@@ -26,17 +26,17 @@ def:pub QualityPage(env: str, date_from: str, date_to: str, refresh_n: int) -> J
     }
 
     return <div className="grid grid-cols-12 gap-4">
-        <div className="col-span-12"><Banner text="🔴 Biggest gap — no explicit quality signal until ai_response_rated (thumbs) + ai_issue_reported flow (PR #607). Everything below is a behavioral proxy (failure / revert / latency), not user-stated quality." /></div>
+        <div className="col-span-12"><Banner text="Our biggest gap: we don't yet have a direct way for users to tell us if the AI's answer was good. Until that launches, everything below is inferred from behavior — failures, undos, and response time — not what users actually say." /></div>
 
-        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Failure rate" data={data["failure_rate"]} loading={loading} /></div>
-        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Median latency" data={data["median_response"]} loading={loading} /></div>
-        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Revert rate" data={data["revert_rate"]} loading={loading} /></div>
-        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Gen success" data={data["gen_success"]} loading={loading} /></div>
+        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="AI failure rate" data={data["failure_rate"]} loading={loading} /></div>
+        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Typical response time" data={data["median_response"]} loading={loading} /></div>
+        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Undo rate" data={data["revert_rate"]} loading={loading} /></div>
+        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="AI success rate" data={data["gen_success"]} loading={loading} /></div>
 
-        <div className="col-span-12 lg:col-span-4"><LineTile title="Success trend" data={data["gen_success_weekly"]} loading={loading} /></div>
-        <div className="col-span-12 lg:col-span-4"><LineTile title="Revert rate trend" data={data["revert_weekly"]} loading={loading} /></div>
-        <div className="col-span-12 lg:col-span-4"><BarsTile title="Failure reasons" data={data["ai_fail_reasons"]} loading={loading} /></div>
+        <div className="col-span-12 lg:col-span-4"><LineTile title="AI success rate over time" data={data["gen_success_weekly"]} loading={loading} /></div>
+        <div className="col-span-12 lg:col-span-4"><LineTile title="Undo rate over time" data={data["revert_weekly"]} loading={loading} /></div>
+        <div className="col-span-12 lg:col-span-4"><BarsTile title="Top failure reasons" data={data["ai_fail_reasons"]} loading={loading} /></div>
 
-        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Helpful rate (thumbs)" data={data["rating_ratio"]} loading={loading} /></div>
+        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Helpful rate" data={data["rating_ratio"]} loading={loading} /></div>
     </div>;
 }

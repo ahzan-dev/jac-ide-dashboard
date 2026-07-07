@@ -23,16 +23,16 @@ def:pub HealthPage(env: str, date_from: str, date_to: str, refresh_n: int) -> Js
     }
 
     return <div className="grid grid-cols-12 gap-4">
-        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="AI latency (median)" data={data["median_response"]} loading={loading} /></div>
+        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Typical response time" data={data["median_response"]} loading={loading} /></div>
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Preview reliability" data={data["preview_reliability"]} loading={loading} /></div>
-        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="JS errors" data={data["exception_total"]} loading={loading} /></div>
+        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Website errors" data={data["exception_total"]} loading={loading} /></div>
 
-        <div className="col-span-12 lg:col-span-6"><AreaTile title="JS error trend" data={data["exception_weekly"]} loading={loading} /></div>
-        <div className="col-span-12 lg:col-span-6"><LineTile title="AI latency trend" data={data["latency_weekly"]} loading={loading} /></div>
+        <div className="col-span-12 lg:col-span-6"><AreaTile title="Website errors over time" data={data["exception_weekly"]} loading={loading} /></div>
+        <div className="col-span-12 lg:col-span-6"><LineTile title="Response time over time" data={data["latency_weekly"]} loading={loading} /></div>
 
         <div className="col-span-12 sm:col-span-6 lg:col-span-4"><StatTile title="Deploy success rate" data={data["deploy_success"]} loading={loading} /></div>
-        <div className="col-span-12 lg:col-span-8"><BarsTile title="Deploy intent (sandbox vs prod)" data={data["deploy_intent"]} loading={loading} /></div>
+        <div className="col-span-12 lg:col-span-8"><BarsTile title="Deploy attempts (test vs live)" data={data["deploy_intent"]} loading={loading} /></div>
 
-        <div className="col-span-12"><Banner text="App-level health is live (AI latency, preview reliability, JS errors). Infra (CPU/mem/pods, real uptime) is not a PostHog metric — reachable via jac-scale Prometheus (get_pod_resource_metrics / get_prometheus_series) pointed at the jac-builder namespace." /></div>
+        <div className="col-span-12"><Banner text="The numbers on this page (AI response time, preview reliability, browser errors) are live and real. Server infrastructure health (server capacity, true uptime) isn't tracked here yet — it lives in a separate internal monitoring system." /></div>
     </div>;
 }
