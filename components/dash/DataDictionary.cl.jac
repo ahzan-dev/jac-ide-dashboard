@@ -1,3 +1,4 @@
+sv import from ...metrics_sv { event_usage }
 import from ..ui.card { Card, CardHeader, CardTitle, CardDescription, CardContent }
 import from ..ui.input { Input }
 import from ..ui.table { Table, TableHeader, TableBody, TableRow, TableHead, TableCell }
@@ -39,6 +40,18 @@ glob EVENTS: list = [
 
 def:pub DataDictionary() -> JsxElement {
     has query: str = "";
+    has usage: dict = {};
+
+    async can with entry {
+        names = [];
+        for ev in EVENTS {
+            names = names + [str(ev["event"])];
+        }
+        res = await event_usage(names);
+        if res {
+            usage = res as dict;
+        }
+    }
 
     def on_search(e: ChangeEvent) {
         query = e.target.value;
@@ -49,14 +62,17 @@ def:pub DataDictionary() -> JsxElement {
     for ev in EVENTS {
         blob = (str(ev["event"]) + " " + str(ev["cat"]) + " " + str(ev["props"]) + " " + str(ev["powers"])).lower();
         if (not q) or (q in blob) {
-            rows = rows + [ev];
+            cnt = len(usage.get(str(ev["event"]), []) as list);
+            mtxt = "—" if cnt == 0 else str(cnt);
+            row = {"cat": ev["cat"], "event": ev["event"], "props": ev["props"], "powers": ev["powers"], "status": ev["status"], "nmetrics": cnt, "mtxt": mtxt};
+            rows = rows + [row];
         }
     }
 
     return <Card className="w-full">
         <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Data dictionary</CardTitle>
-            <CardDescription className="text-xs">The 26 CORE events the dashboard depends on. 🟢 live · 🟡 pending deploy/config · 🔴 not yet instrumented. Full contract: .docs/posthog/EVENT_CATALOG.md.</CardDescription>
+            <CardDescription className="text-xs">The 26 CORE events the dashboard depends on. 🟢 live · 🟡 pending deploy/config · 🔴 not yet instrumented. Full contract: .docs/posthog/EVENT_CATALOG.md. · 'Metrics' = live count of registry metrics using each event.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
             <Input value={query} onChange={on_search} placeholder="Search events, properties, what they power…" className="h-8 max-w-sm text-xs" />
@@ -68,6 +84,7 @@ def:pub DataDictionary() -> JsxElement {
                             <TableHead className="text-xs">Category</TableHead>
                             <TableHead className="text-xs">Key properties</TableHead>
                             <TableHead className="text-xs">Powers</TableHead>
+                            <TableHead className="text-center text-xs">Metrics</TableHead>
                             <TableHead className="text-center text-xs">Status</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -81,6 +98,7 @@ def:pub DataDictionary() -> JsxElement {
                                 <TableCell className="text-xs"><Badge variant="outline">{str(ev["cat"])}</Badge></TableCell>
                                 <TableCell className="text-xs text-muted-foreground">{str(ev["props"])}</TableCell>
                                 <TableCell className="text-xs text-muted-foreground">{str(ev["powers"])}</TableCell>
+                                <TableCell className="text-center text-xs tabular-nums">{str(ev["mtxt"])}</TableCell>
                                 <TableCell className="text-center text-xs">{str(ev["status"])}</TableCell>
                             </TableRow>
                         }}

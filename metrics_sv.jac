@@ -18,12 +18,20 @@ import asyncio;
 import requests;
 import redis;
 import from datetime { datetime, timedelta, timezone }
+import from byllm.lib { Model }
 
 glob PH_KEY: str = os.environ.get("POSTHOG_API_KEY", "");
 glob PH_HOST: str = os.environ.get("POSTHOG_HOST", "https://us.posthog.com");
 glob PH_PROJECT: str = os.environ.get("POSTHOG_PROJECT_ID", "425465");
 glob REDIS_URL: str = os.environ.get("REDIS_URL", "redis://localhost:6379");
 glob CACHE_TTL: int = 600;
+
+# byLLM narrative (AI insights tile). Server-only key; degrades honestly if unset.
+glob ANTH_KEY: str = os.environ.get("ANTHROPIC_API_KEY", "");
+# Haiku accepts `temperature` (byLLM/litellm inject a default); Opus 4.7+ rejects it.
+# Right-sized for a 3-4 sentence readout. Override with INSIGHTS_MODEL if desired.
+glob ANTH_MODEL: str = os.environ.get("INSIGHTS_MODEL", "claude-haiku-4-5");
+glob INSIGHT_LLM: Model = Model(model_name=ANTH_MODEL);
 
 # ---------------------------------------------------------------------------
 # Redis cache (degrades gracefully to no-cache if Redis is unreachable)
@@ -667,6 +675,82 @@ async def:priv run_adhoc(sql: str) -> dict {
         return {"error": res["error"], "columns": [], "rows": []};
     }
     return {"error": "", "columns": res["columns"], "rows": res["results"]};
+}
+
+# ---------------------------------------------------------------------------
+# AI insights — an LLM-authored narrative over the already-computed metrics.
+# Server-only ANTHROPIC_API_KEY; mirrors billing_sv's honest-degrade pattern.
+# ---------------------------------------------------------------------------
+
+def _summarize_context(context: dict) -> str {
+    parts = [];
+    for k in context.keys() {
+        v = context.get(k);
+        if not isinstance(v, dict) {
+            continue;
+        }
+        vv = v as dict;
+        meta = vv.get("meta", {}) as dict;
+        unit = str(meta.get("unit", ""));
+        val = vv.get("value");
+        rows = vv.get("rows");
+        series = vv.get("series");
+        if val is not None {
+            parts = parts + [str(k) + ": " + str(val) + " " + unit];
+        } elif rows and isinstance(rows, list) and len(rows as list) > 0 {
+            first = (rows as list)[0] as list;
+            parts = parts + [str(k) + ": top = " + str(first)];
+        } elif series and isinstance(series, list) and len(series as list) > 0 {
+            pts = series as list;
+            last = pts[len(pts) - 1] as dict;
+            parts = parts + [str(k) + " (latest): " + str(last.get("y")) + " " + unit];
+        }
+    }
+    return "\n".join(parts);
+}
+
+# byLLM: the function body IS the LLM call. Model configured via INSIGHT_LLM
+# (Anthropic, reads ANTHROPIC_API_KEY from env). The `sem` strings are the prompt.
+def _write_insight(metrics: str) -> str by INSIGHT_LLM(max_tokens=400);
+sem _write_insight = "You are a product analytics assistant for JacHammer, an AI-powered web IDE. Given current dashboard metrics (server-computed, already filtered to the production environment), write a 3-4 sentence plain-English readout for a decision-maker: what stands out, and the single thing most worth watching next. Cite the specific numbers. No preamble, no bullet points, no restating the list verbatim.";
+sem _write_insight.metrics = "The current dashboard metrics, one per line as 'key: value unit' (or top row / latest point for non-scalar tiles).";
+
+async def:priv ai_insights(context: dict) -> dict {
+    if not ANTH_KEY {
+        return {"available": False, "reason": "ANTHROPIC_API_KEY not set on the server.", "text": ""};
+    }
+    summary = _summarize_context(context);
+    if not summary {
+        return {"available": False, "reason": "No metric values to summarize yet.", "text": ""};
+    }
+    try {
+        text = await asyncio.to_thread(_write_insight, summary);
+        return {"available": True, "reason": "", "text": str(text).strip()};
+    } except Exception as e {
+        return {"available": False, "reason": str(e)[:160], "text": ""};
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Event-usage map for the data dictionary — which registry metrics reference
+# each event, derived live from METRICS so the dictionary can't silently drift.
+# ---------------------------------------------------------------------------
+
+def:priv event_usage(events: list) -> dict {
+    out = {};
+    for name in events {
+        nm = str(name);
+        needle = "'" + nm + "'";
+        keys = [];
+        for k in METRICS.keys() {
+            m = METRICS[k];
+            if needle in m.sql {
+                keys = keys + [k];
+            }
+        }
+        out[nm] = keys;
+    }
+    return out;
 }
 
 async def _run_metric(m: Metric, out: dict, env: str, range_days: int, date_from: str, date_to: str, bkt: str, ck: str) -> dict {

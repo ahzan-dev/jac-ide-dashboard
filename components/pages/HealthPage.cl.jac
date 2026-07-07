@@ -1,6 +1,6 @@
 sv import from ...metrics_sv { metrics_batch }
 import from ..dash.StatTile { StatTile }
-import from ..dash.ChartTiles { LineTile, AreaTile, BarsTile, StaticStat, Banner }
+import from ..dash.ChartTiles { LineTile, AreaTile, BarsTile, Banner }
 
 glob HEALTH_KEYS: list = ["median_response", "preview_reliability", "exception_total", "exception_weekly", "latency_weekly", "deploy_success", "deploy_intent"];
 
@@ -26,7 +26,6 @@ def:pub HealthPage(env: str, date_from: str, date_to: str, refresh_n: int) -> Js
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="AI latency (median)" data={data["median_response"]} loading={loading} /></div>
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Preview reliability" data={data["preview_reliability"]} loading={loading} /></div>
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="JS errors" data={data["exception_total"]} loading={loading} /></div>
-        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StaticStat title="True uptime" value="—" note="PostHog can't measure uptime. Needs an external probe / status page." definition="Real service availability." /></div>
 
         <div className="col-span-12 lg:col-span-6"><AreaTile title="JS error trend" data={data["exception_weekly"]} loading={loading} /></div>
         <div className="col-span-12 lg:col-span-6"><LineTile title="AI latency trend" data={data["latency_weekly"]} loading={loading} /></div>

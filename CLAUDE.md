@@ -40,6 +40,16 @@ Therefore:
 - **PostHog `$host` is NOT materialized** (only `environment` is). Host-filtered prod queries full-scan and can
   exceed a tight timeout (`run_hogql` uses 15s for now). Materializing `$host` in PostHog is the real fix
   (spec open-decision #3) — then drop the timeout back to ~8s.
+- **byLLM (AI insights tile) — two gotchas that cost a session.** `ai_insights` in `metrics_sv.jac` uses
+  `def _write_insight(m: str) -> str by INSIGHT_LLM(max_tokens=400);` with `sem` prompts (byLLM is installed in
+  `~/.jacvenv`; litellm reads `ANTHROPIC_API_KEY`). (1) byLLM imports `pydantic`, which can bind to a **stale
+  `.jac/venv` built on a different Python** → `No module named 'pydantic_core._pydantic_core'` at serve. Fix:
+  `rm -rf .jac` then rebuild — regenerates the project venv on `~/.jacvenv`'s Python 3.12. **This wipes
+  `.jac/data/main.db`, so re-seed the admin** with the `/user/register` one-liner afterward. (2) byLLM/litellm
+  **inject a default `temperature`**, which **Opus 4.7+ / Sonnet 5 reject** (`temperature is deprecated for this
+  model`). Use a model that accepts it — `INSIGHT_LLM` defaults to **`claude-haiku-4-5`** (right-sized for a
+  3–4-sentence readout; override via `INSIGHTS_MODEL` env). Type-check byLLM code with `~/.jacvenv/bin/jac check`
+  (the native `~/.jacbin` build lacks byllm, so it errors on `import from byllm.lib`).
 
 ## Dev up (local)
 ```bash
@@ -156,8 +166,10 @@ Tiles in `components/dash/ChartTiles.cl.jac` (+ `StatTile`). Pick by job, NOT by
   - **Hardcoded admin: username `admin` / password `jachammer`** — seeded once via `/user/register` (persists
     in the user DB across restarts; JWT is stateless so tokens survive restarts too). Re-seed if the DB is wiped:
     `curl -X POST :8000/user/register -d '{"identities":[{"type":"username","value":"admin"},{"type":"email","value":"admin@jaseci.org"}],"credential":{"type":"password","password":"jachammer"}}'`.
-  - **Stripe join**: no `STRIPE_SECRET_KEY` in `.env`, so margin/runway/CAC on the Cost page are honest "—"
-    tiles (burn spec §4 "cost of the bet"). Integration point: add `STRIPE_SECRET_KEY`, a `billing_sv.jac`
+  - **Stripe join**: (⚠️ STALE as of the decision-review batch below — `STRIPE_SECRET_KEY` **is now set** in
+    `.env`, along with `VITE_PUBLIC_POSTHOG_PROJECT_TOKEN` + `POSTHOG_PROJECT_ID`; the margin/cost tiles may now
+    compute real numbers — verify.) Historically: no `STRIPE_SECRET_KEY` in `.env`, so margin/runway/CAC on the
+    Cost page were honest "—" tiles (burn spec §4 "cost of the bet"). Integration point: add `STRIPE_SECRET_KEY`, a `billing_sv.jac`
     with a `def:priv billing_summary()` that lists active Stripe subscriptions → MRR, and compute
     margin = (MRR − metered_spend) ÷ MRR; wire it into the Cost tiles (mirrors the POSTHOG_PROJECT_TOKEN pattern).
   - **Production hardening TODO**: (1) set `[plugins.scale.jwt] secret` (default is the insecure test key —
@@ -178,3 +190,24 @@ Tiles in `components/dash/ChartTiles.cl.jac` (+ `StatTile`). Pick by job, NOT by
 - **Chart polish**: Y-axis no longer clipped (margin), hbar labels moved above bars (no truncation).
 - **Cleanup**: removed dead `StubPage`, `STUB_NOTES`, `_W10`; all 11 pages route to real components (Settings is
   the routing fallback).
+
+## Decision-review batch (honesty fixes + hardcoded-tile resolution; verified via curl + browser)
+Prompted by a per-tile "does this help a decision?" review. Fixes:
+- **Mislabels corrected**: Impact "Acceptance proxy trend" now fed by a new **`kept_weekly`** metric (revert-based
+  acceptance), not `gen_success_weekly` (completion). `churn_risk` carries a real rolling-window label (was showing
+  the date-picker range it ignores). "Registered" → "Signups (180d)" (fixed 180d window). "Cost / active user" →
+  **"Cost / spender"** (`cost_per_user` SQL divides by distinct spenders, not actives).
+- **Naming**: the one `funnel` metric now reads "Activation funnel" on all 3 pages it appears; Advanced
+  "Failure-pattern detection" → "Top failure reasons", "Usage forecast (naive)" → "AI volume (daily)" (it's history).
+- **HogQL box**: prefilled query now includes the exact prod env clause + a hint that ad-hoc SQL is NOT
+  auto-env-filtered.
+- **Hardcoded tiles resolved**: Impact "Est. hours saved" → an honest **range** ("N–Mh", ~1.5–3 min/file) instead of
+  false-precise "Nh". **Deleted 3 permanently-blocked stubs**: Prompt clustering (Advanced), CAC by channel (Cost),
+  True uptime (Health).
+- **AI insights (real, via byLLM)**: new `InsightsBox.cl.jac` ("Generate insights" button) → `ai_insights(context)` in
+  `metrics_sv.jac`, an **actual `by llm()`** call (`_write_insight` + `sem`, model `INSIGHT_LLM`). Summarizes the
+  page's scalars/rows/series and returns a 3–4-sentence decision readout. Degrades honestly with no key. See the
+  byLLM gotchas in **Toolchain reality** above (pydantic `.jac` nuke; `temperature`→haiku).
+- **Dynamic data dictionary**: new `event_usage(events)` server fn scans the `METRICS` registry live; DataDictionary
+  fetches it on mount (`async can with entry`) and shows a **"Metrics"** column = count of registry metrics
+  referencing each event (`—` when none). Self-updating — can't silently drift from the registry.

@@ -60,7 +60,6 @@ def:pub CostPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxE
 
         {#* Burn spec §4 — the cost of the bet. Revenue side is external (Stripe). *#}
         <div className="col-span-12 lg:col-span-4"><StaticStat title="Burn rate + runway" value="—" note="'The clock everything races.' Needs metered spend (PostHog, gated) + cash balance & MRR (Stripe). Add STRIPE_SECRET_KEY to activate." definition="Months of runway = cash ÷ (spend − revenue)." /></div>
-        <div className="col-span-12 lg:col-span-4"><StaticStat title="CAC by channel" value="—" note="Needs ad-spend (external) ÷ signups by channel. PostHog has the denominator; the $ spend is external." definition="Customer acquisition cost vs value returned." /></div>
         <div className="col-span-12 lg:col-span-4"><StaticStat title="Power-user cost" value="—" note="Top-decile spend from ai_generation_metered — activates with POSTHOG_PROJECT_TOKEN on the prod pod." definition="Σ cost_usd of the top 10% of spenders." /></div>
     </div>;
 }
