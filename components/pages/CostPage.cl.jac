@@ -2,6 +2,7 @@ sv import from ...metrics_sv { metrics_batch }
 sv import from ...billing_sv { billing_summary }
 import from ..dash.StatTile { StatTile }
 import from ..dash.ChartTiles { AreaTile, BarsTile, StaticStat, Banner }
+import from ..dash.util { cache_key, cache_get, cache_put, cacheable }
 
 glob COST_KEYS: list = ["metered_rows", "total_spend", "cost_per_request", "cost_per_user", "model_mix", "ai_requests_weekly"];
 
@@ -12,12 +13,22 @@ def:pub CostPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxE
     has seen: int = -999;
 
     async def load(refresh: bool) {
+        k = cache_key("cost", env, date_from, date_to);
+        hit = cache_get(k);
+        if (hit is not None) and (not refresh) {
+            h = hit as dict;
+            data = h["data"] as dict;
+            billing = h["billing"] as dict;
+            loading = False;
+            return;
+        }
         loading = True;
         keys = COST_KEYS;
         res = await metrics_batch(keys, env, date_from, date_to, refresh);
         data = res as dict;
         bill = await billing_summary();
         billing = bill as dict;
+        if cacheable(data, keys) { cache_put(k, {"data": data, "billing": billing}); }
         loading = False;
     }
     async can with (env, date_from, date_to, refresh_n) entry {

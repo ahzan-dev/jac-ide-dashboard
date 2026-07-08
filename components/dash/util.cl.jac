@@ -99,6 +99,56 @@ def:pub delta_badge(delta: any, good_when_up: bool) -> dict {
     return {"arrow": arrow, "cls": cls, "txt": sign + str(dd) + "% vs prev"};
 }
 
+# ---- client-side page cache: instant page switches --------------------------
+# Each page's last batch result is kept alive across mount/unmount so switching
+# pages renders immediately instead of re-fetching every time. Keyed by
+# page + env + date range: a different env/range is a new key (miss → fresh
+# fetch), and the top-bar Refresh forces a bypass (refresh=True). `glob` module
+# state survives component remounts and is shared across all pages; it is NOT
+# reactive — each page's own `data`/`loading` has-vars still drive its render.
+glob PAGE_CACHE: dict = {};
+
+def:pub cache_key(page: str, env: str, date_from: str, date_to: str) -> str {
+    return page + ":" + env + ":" + date_from + ":" + date_to;
+}
+def:pub cache_get(k: str) -> dict | None {
+    hit = PAGE_CACHE.get(k, None);
+    if hit is None { return None; }
+    return hit as dict;
+}
+def:pub cache_put(k: str, v: dict) -> dict {
+    PAGE_CACHE[k] = v;
+    return v;
+}
+# Decide whether a page's batch result is worth caching. Rule: MAJORITY-HEALTHY —
+# cache only if more tiles returned real data than carried a transient `error`
+# (PostHog 503 / timeout). This keeps switching instant for fully- or mostly-
+# healthy pages (the common case), still caches during a partial PostHog brownout
+# (e.g. 11 good tiles + 1 timeout), but refuses to freeze an all-empty or mostly-
+# broken snapshot — that page re-fetches on the next visit and self-heals instead
+# of showing stale "n/a" for the whole session. Tiles that are legitimately empty
+# (no data, no error — e.g. a stub) count for neither side.
+def:pub cacheable(res: dict, keys: list) -> bool {
+    good = 0;
+    bad = 0;
+    for k in keys {
+        tile = res.get(k as str, None);
+        if tile is not None {
+            t = tile as dict;
+            if t.get("error", "") { bad += 1; }
+            elif _tile_has_data(t) { good += 1; }
+        }
+    }
+    return good > bad;
+}
+# A tile carries data if it has a scalar value, a trend series, or table/funnel rows.
+def _tile_has_data(t: dict) -> bool {
+    if t.get("value", None) is not None { return True; }
+    if len(t.get("series", []) as list) > 0 { return True; }
+    if len(t.get("rows", []) as list) > 0 { return True; }
+    return False;
+}
+
 # Slope of a weekly series: compare the last two COMPLETE points (drop the in-progress week).
 # Returns {arrow, cls, txt}. cls is 'good'/'bad'/'flat' given the metric's good_when_up.
 def:pub slope_of(series: list, good_when_up: bool) -> dict {

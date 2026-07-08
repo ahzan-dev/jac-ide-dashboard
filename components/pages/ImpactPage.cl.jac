@@ -1,4 +1,5 @@
 sv import from ...metrics_sv { metrics_batch }
+import from ..dash.util { cache_key, cache_get, cache_put, cacheable }
 import from ..dash.StatTile { StatTile }
 import from ..dash.ChartTiles { LineTile, AreaTile, StaticStat, Banner }
 
@@ -10,10 +11,18 @@ def:pub ImpactPage(env: str, date_from: str, date_to: str, refresh_n: int) -> Js
     has seen: int = -999;
 
     async def load(refresh: bool) {
+        k = cache_key("impact", env, date_from, date_to);
+        hit = cache_get(k);
+        if (hit is not None) and (not refresh) {
+            data = hit as dict;
+            loading = False;
+            return;
+        }
         loading = True;
         keys = IMPACT_KEYS;
         res = await metrics_batch(keys, env, date_from, date_to, refresh);
         data = res as dict;
+        if cacheable(data, keys) { cache_put(k, data); }
         loading = False;
     }
     async can with (env, date_from, date_to, refresh_n) entry {
