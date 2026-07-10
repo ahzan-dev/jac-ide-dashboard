@@ -18,45 +18,45 @@ Internal, read-only analytics cockpit. Full-stack Jac app. Reads PostHog via ser
 - Honest tiles: each carries its exact definition, window, and small-N/proxy caveat.
 - HogQL: presence = `coalesce(toString(properties.X),'') != ''`; numbers = `toFloat64OrNull(toString(...))`.
 
-## Toolchain reality (READ THIS — it cost a session to learn)
-This app does **NOT** use `jaclang.scale`. Caching is the plain `redis` Python package, not scale's tiered memory.
-Therefore:
-- **RUN with the pip jac `~/.jacvenv/bin/jac` (v0.16.7), NOT the native `~/.jacbin/jac`.** The native binary's
-  `jac start` scale-serve path is BROKEN in this build (`No module named 'jaclang.scale.memory'` /
-  `jaclang.scale.jserver.jfast_api` / `trace_ctx` — missing bundled submodules) and forces a MongoDB backend
-  (pymongo not installed). `~/.jacvenv` has no scale layer, so it serves the plain fullstack app in-process.
-  `~/.jacvenv` already has `requests` + `redis` installed.
-- **Use the native `~/.jacbin/jac check <file>` for authoritative type-checking** (it's stricter than the venv),
-  but serve with `~/.jacvenv/bin/jac`. Best of both.
-- **`[plugins.scale.microservices] enabled = false` in `jac.toml` is REQUIRED.** Otherwise the scale layer
-  auto-detects `metrics_sv` (sv-imported by the client) as a microservice and spawns it as a subprocess with the
-  broken venv jac → crash. With it false, `metrics_sv` runs in-process (also plain-imported in `main.jac`).
-- **Redis must be published on the host.** The pre-existing `jac-redis` container has NO host port map; use the
-  dedicated `dash-redis` (`docker run -d --name dash-redis -p 6379:6379 redis:7-alpine`). `REDIS_URL=redis://localhost:6379`.
-  The cache degrades gracefully to no-op if Redis is unreachable (so the app still works uncached).
-- Docstrings go BEFORE the def, never inside a function body. Jac has no `pass` (use `return;`).
-  `json.loads(...)` returns Any → cast with `as dict`. `requests.post(json=...)` trips the JsonType checker →
-  use `data=json.dumps(payload)` with an explicit `Content-Type: application/json` header.
-- **PostHog `$host` is NOT materialized** (only `environment` is). Host-filtered prod queries full-scan and can
-  exceed a tight timeout (`run_hogql` uses 15s for now). Materializing `$host` in PostHog is the real fix
-  (spec open-decision #3) — then drop the timeout back to ~8s.
-- **byLLM (AI insights tile) — two gotchas that cost a session.** `ai_insights` in `metrics_sv.jac` uses
-  `def _write_insight(m: str) -> str by INSIGHT_LLM(max_tokens=400);` with `sem` prompts (byLLM is installed in
-  `~/.jacvenv`; litellm reads `ANTHROPIC_API_KEY`). (1) byLLM imports `pydantic`, which can bind to a **stale
-  `.jac/venv` built on a different Python** → `No module named 'pydantic_core._pydantic_core'` at serve. Fix:
-  `rm -rf .jac` then rebuild — regenerates the project venv on `~/.jacvenv`'s Python 3.12. **This wipes
-  `.jac/data/main.db`, so re-seed the admin** with the `/user/register` one-liner afterward. (2) byLLM/litellm
-  **inject a default `temperature`**, which **Opus 4.7+ / Sonnet 5 reject** (`temperature is deprecated for this
-  model`). Use a model that accepts it — `INSIGHT_LLM` defaults to **`claude-haiku-4-5`** (right-sized for a
-  3–4-sentence readout; override via `INSIGHTS_MODEL` env). Type-check byLLM code with `~/.jacvenv/bin/jac check`
-  (the native `~/.jacbin` build lacks byllm, so it errors on `import from byllm.lib`).
+## Toolchain reality (⚠ CHANGED 2026-07-10 — jaclang shipped a big breaking release)
+**RUN with the native dev `jac`** (`~/.local/bin/jac` → `~/Documents/jaseci/jaseci/jac/zig-out/bin/jac`,
+"dev mode", jaclang 0.31, py3.14). The old pip `~/.jacvenv` is gone. Per
+docs.jaseci.org/community/breaking-changes: the **pluggy plugin/hook system was removed** (`hookimpl` gone) and
+**byllm + jac-scale are folded into jaclang core** — no back-compat shims. Consequences that WILL bite:
+- **byLLM import is `import from jaclang.byllm.lib { Model }`** (was `byllm.lib`). **Do NOT `jac install byllm`** —
+  it pulls the standalone pip `byllm 0.6.19`, which still does `import ... hookimpl` → `cannot import name 'hookimpl'`
+  crash at serve/build. Use the built-in (`jaclang.byllm`).
+- **jac.toml config flattened** (`[plugins.<name>]` → `[<name>]`): `[scale.microservices] enabled = false`
+  (was `[plugins.scale.microservices]`) and `[client.vite]` (was `[plugins.client.vite]`). Microservices MUST
+  stay `false` or `jac start` auto-spawns `metrics_sv` + `billing_sv` as subprocesses; with it false, everything
+  runs in one in-process gateway.
+- **Type-check + serve with the SAME native `jac`** now (byllm is built in, so `jac check` / `jac test` resolve
+  it). `jac check` on 0.31 is stricter — a couple pre-existing `E1053` `len(<any>)` warnings on `metrics_sv.jac`
+  are runtime-harmless and don't block `jac start`.
+- **Auth changed**: tokens are now ~221 chars and the OLD `.jac/data` admin hash fails login (401 "Invalid
+  credentials") under new jaclang — re-seed a fresh user (`/user/register`) if login 401s.
+- **Redis**: use `dash-redis` (`docker run -d --name dash-redis -p 6379:6379 redis:7-alpine`),
+  `REDIS_URL=redis://localhost:6379`. Cache degrades to a no-op if Redis is unreachable (app still works uncached).
+- **byLLM gotcha still live**: byLLM/litellm inject a default `temperature`, which Opus 4.7+/Sonnet 5 reject.
+  `INSIGHT_LLM` defaults to **`claude-haiku-4-5`** (accepts it; override via `INSIGHTS_MODEL`). The old
+  pydantic / `rm -rf .jac` gotcha is now moot (byllm is core, not a stale project venv).
+- Jac syntax: docstrings BEFORE the def; no `pass` (use `return;`); `json.loads(...) as dict`;
+  `requests.post(data=json.dumps(payload))` + explicit `Content-Type` header (`json=` trips the JsonType checker).
+- **`$host` reality (reconciled — the two old claims below contradicted each other):** the byLLM eval found
+  host-filtered `prod` time-queries (`toDate(timestamp)=today()` + the `$host` allowlist) **full-scan and hit the
+  20s `run_hogql` timeout**. Treat `$host` as effectively NOT materialized for AI-builder-generated queries. Real
+  fix: **emit `environment='prod'` from prod** so the `$host` allowlist fallback (and the full scan) disappears —
+  see `.docs/posthog/TRACKING_GAPS.md` §D-14.
 
 ## Dev up (local)
 ```bash
 docker start dash-redis 2>/dev/null || docker run -d --name dash-redis -p 6379:6379 redis:7-alpine
 set -a; source .env; set +a
-export JAC_BUN="$HOME/.bun/bin/bun"          # native binary lacks bun; venv jac finds it via PATH/JAC_BUN
-~/.jacvenv/bin/jac start main.jac --port=8000   # serves the app at http://localhost:8000/
+export JAC_BUN="$HOME/.bun/bin/bun"
+jac start main.jac --port=8010     # native dev jac. :8000 is often the jac-ide app — use a free port.
+# login 401? re-seed a fresh admin:
+# curl -X POST :8010/user/register -H 'Content-Type: application/json' \
+#   -d '{"identities":[{"type":"username","value":"admin"},{"type":"email","value":"admin@jaseci.org"}],"credential":{"type":"password","password":"jachammer"}}'
 ```
 
 ## UI — jac-shadcn ONLY (strict)
@@ -99,8 +99,9 @@ container; follow the `dataviz` skill. Read `jac-shadcn`/`-blocks`/`-components`
   request** via `async def:pub` + `asyncio.gather(*[asyncio.to_thread(run_hogql, …)])`. 12 metrics (~18 HogQL
   calls) return in ~5s cold, instant when Redis-cached. **Each page makes ONE batch call**; tiles are
   presentational (receive their result object as a `data` prop — no per-tile `sv import`/fetch).
-- `$host` **is already materialized** in PostHog (`events.mat_$host`) — a prod query is ~1.4s. PostHog is NOT
-  the bottleneck; server serialization was. So materialization is done; don't re-flag it.
+- `$host`: was believed materialized (`events.mat_$host`, ~1.4s), BUT the 2026-07 byLLM eval saw host-filtered
+  time-queries full-scan to the 20s timeout — treat it as effectively NOT materialized for ad-hoc/AI-builder
+  queries (see Toolchain reality `$host` note + `TRACKING_GAPS.md` §D-14). Registry batch queries are still fast.
 - Range semantics: KPIs + hbars + funnel use the selected `{from}/{to}`; **weekly trends (10wk) and retention
   (6 cohort-weeks) keep their own multi-period windows** (a slope needs multiple periods) — labeled honestly.
 
@@ -172,7 +173,7 @@ Tiles in `components/dash/ChartTiles.cl.jac` (+ `StatTile`). Pick by job, NOT by
     Cost page were honest "—" tiles (burn spec §4 "cost of the bet"). Integration point: add `STRIPE_SECRET_KEY`, a `billing_sv.jac`
     with a `def:priv billing_summary()` that lists active Stripe subscriptions → MRR, and compute
     margin = (MRR − metered_spend) ÷ MRR; wire it into the Cost tiles (mirrors the POSTHOG_PROJECT_TOKEN pattern).
-  - **Production hardening TODO**: (1) set `[plugins.scale.jwt] secret` (default is the insecure test key —
+  - **Production hardening TODO**: (1) set `[scale.jwt] secret` (config flattened — was `[plugins.scale.jwt]`; default is the insecure test key —
     anyone can forge tokens); (2) move the admin password out of the seed command into a secret / rotate it;
     (3) optionally gate to jac-scale role `admin` (provision via `/admin`) instead of "any registered user".
   - User DB persists in `.jac/data/` (SQLite: `main.db`); the admin survives normal restarts. If it's wiped
@@ -211,3 +212,27 @@ Prompted by a per-tile "does this help a decision?" review. Fixes:
 - **Dynamic data dictionary**: new `event_usage(events)` server fn scans the `METRICS` registry live; DataDictionary
   fetches it on mount (`async can with entry`) and shows a **"Metrics"** column = count of registry metrics
   referencing each event (`—` when none). Self-updating — can't silently drift from the registry.
+
+## AI-first "Ask" builder + byLLM eval (2026-07)
+- **Ask (AI builder) page** (`components/pages/AskPage.cl.jac`, nav "✨ Ask") — a conversational planner: NL
+  question → `ai_build(question,env,date_from,date_to)` (def:priv) → byLLM `_plan_query` returns a `QueryPlan`
+  with `mode` ∈ **metrics** (reuse verified registry keys) / **query** (write an env-injected read-only HogQL
+  `SELECT`, grounded by `_SCHEMA_DOC`) / **clarify**. Renders via `components/dash/DynamicTile.cl.jac`
+  (chart-string → an existing tile). **Registry-first**, raw-SQL as the escape hatch; the LLM never writes JSX.
+  Time-words ("today"/"this week") route to dated queries; "X vs Y" → `chart=compare` (±% delta, `good_up`
+  colors direction). **📌 Pin** → `components/pages/PinnedPage.cl.jac` ("My Dashboard") re-runs saved recipes
+  LIVE via `run_pinned` (recipe, not snapshot). Every answer has a "How this was built" panel (mode/reasoning/SQL).
+- **Non-negotiable**: `ai_build`'s generated SQL gets `env_filter()` auto-injected in `_prep_query_sql` (it is
+  NOT the ad-hoc `run_adhoc` path) — read-only, single-statement, `LIMIT`-capped.
+- **Tests** — `metrics_sv.test.jac`: 27 deterministic tests (`jac test metrics_sv.jac`) covering env injection,
+  `_prep_query_sql`, `_shape_ai_tile` (stat/compare/table/series), `_pct_delta`, `_col_index`, `_tile_for`,
+  `_catalog`. A `by INSIGHT_LLM` fn **cannot be MockLLM'd** (model bound at def-time) → planner quality is eval'd
+  against the live endpoint, not unit-tested.
+- **Planner prompt hardening** (from a 41-scenario eval): `QueryPlan` fields ordered `chart`/`good_up` BEFORE the
+  verbose `sql` (truncation was silently defaulting them → comparisons rendered as plain tables); `max_tokens=1400`;
+  a **concept-gap honesty rule** (don't fake untracked answers like session-length/acquisition-channel/first-try —
+  `clarify` and name the gap); `re.search(r"(?i)\blimit\b")` for the LIMIT cap (a `\nLIMIT` defeated the old check).
+- **Product tracking gaps** → `.docs/posthog/TRACKING_GAPS.md`: ranked new events the AI builder can't answer
+  without (upgrade_checkout_succeeded, UTM/referrer, conversation_id+turn_number, `model` on ai_message_*, ship
+  the built-but-unlaunched ai_response_rated/ai_issue_reported UI, ai_response_edited, ide_session_ended,
+  cold_start on preview_ready).

@@ -13,12 +13,14 @@ Shapes: scalar (value + optional spark series) · series (line/bar) · rows (hba
 """
 
 import os;
+import re;
 import json;
 import asyncio;
+import traceback;
 import requests;
 import redis;
 import from datetime { datetime, timedelta, timezone }
-import from byllm.lib { Model }
+import from jaclang.byllm.lib { Model }
 
 glob PH_KEY: str = os.environ.get("POSTHOG_API_KEY", "");
 glob PH_HOST: str = os.environ.get("POSTHOG_HOST", "https://us.posthog.com");
@@ -365,7 +367,7 @@ glob METRICS: dict[str, Metric] = {
     "model_mix": Metric(
         key="model_mix", title="Which AI model people choose", shape="rows",
         definition="How often users manually switch to each AI model — an estimate of popularity, not a direct usage count.",
-        caveat="Counts model switches, not which model ran each request; an exact breakdown comes with detailed cost-tracking.",
+        caveat="Counts model switches, not which model ran each request — see 'AI requests by model' (model_usage) for the true run breakdown once properties.model has shipped.",
         sql="SELECT coalesce(nullIf(toString(properties.to),''),'unknown') model, count() n FROM events WHERE event='ai_model_switched_from_chat' {env_filter} " + _RANGE + " GROUP BY model ORDER BY n DESC LIMIT 8"
     ),
     "issue_categories": Metric(
@@ -446,6 +448,75 @@ glob METRICS: dict[str, Metric] = {
         definition="Groups users by the week they signed up, then tracks the share still using the AI each following week. The 4-week mark shows who sticks around after a month.",
         caveat="Based on small groups so far — treat the pattern as directional. Groups under 15 people are flagged as too small to trust.",
         good_when_up=True
+    ),
+
+    # ---- tracking-gaps tiles (consume the newly-added events; each reads
+    # empty until its event ships to prod — see TRACKING_GAPS.md) -----------
+    "upgrade_conversion": Metric(
+        key="upgrade_conversion", title="Upgrade conversion", unit="%",
+        definition="Of users who clicked to upgrade, the share who actually completed the paid upgrade.",
+        caveat="Empty until upgrade_checkout_succeeded ships to production.",
+        sql="SELECT round(100.0*countIf(event='upgrade_checkout_succeeded')/nullIf(countIf(event='upgrade_checkout_clicked'),0),1) FROM events WHERE event IN ('upgrade_checkout_clicked','upgrade_checkout_succeeded') {env_filter} " + _RANGE
+    ),
+    "paid_upgrades": Metric(
+        key="paid_upgrades", title="Completed upgrades", unit="",
+        definition="Number of paid subscription upgrades that completed in this period.",
+        sql="SELECT count() FROM events WHERE event='upgrade_checkout_succeeded' {env_filter} " + _RANGE,
+        spark="SELECT {bkt}(timestamp) wk, count() n FROM events WHERE event='upgrade_checkout_succeeded' {env_filter} " + _RANGE + " GROUP BY wk ORDER BY wk"
+    ),
+    "mrr_churn": Metric(
+        key="mrr_churn", title="MRR lost to churn", unit="$", good_when_up=False,
+        definition="Monthly recurring revenue lost from subscription cancellations in this period.",
+        caveat="Empty until subscription_canceled ships to production.",
+        sql="SELECT round(-1*sum(toFloat64OrNull(toString(properties.mrr_delta))),2) FROM events WHERE event='subscription_canceled' {env_filter} " + _RANGE
+    ),
+    "first_try_success": Metric(
+        key="first_try_success", title="First-try success", unit="%",
+        definition="Share of chat threads where the AI got it right on the first turn — turn 1 completed and no follow-up turn was needed.",
+        caveat="Empty until conversation_id + turn_number ship to production.",
+        sql="SELECT round(100.0*countIf(t1_done AND max_turn=1)/nullIf(count(),0),1) FROM (SELECT toString(properties.conversation_id) cid, max(toFloat64OrNull(toString(properties.turn_number))) max_turn, countIf(event='ai_message_completed' AND toFloat64OrNull(toString(properties.turn_number))=1)>0 t1_done FROM events WHERE event IN ('ai_message_sent','ai_message_completed') {env_filter} " + _RANGE + " GROUP BY cid HAVING cid != '')"
+    ),
+    "model_latency": Metric(
+        key="model_latency", title="Response time by model", shape="rows", unit="s", good_when_up=False,
+        definition="Typical AI response time, broken down by the model that actually ran each request.",
+        caveat="Empty until model ships on ai_message_completed.",
+        sql="SELECT toString(properties.model) model, round(median(toFloat64OrNull(toString(properties.duration_ms)))/1000,1) v FROM events WHERE event='ai_message_completed' AND coalesce(toString(properties.model),'')!='' {env_filter} " + _RANGE + " GROUP BY model ORDER BY v DESC LIMIT 20"
+    ),
+    "model_usage": Metric(
+        key="model_usage", title="AI requests by model", shape="rows", unit="",
+        definition="How many AI requests actually ran on each model — the true usage breakdown (distinct from model_mix, which counts manual switches).",
+        caveat="Empty until model ships on ai_message_completed.",
+        sql="SELECT coalesce(nullIf(toString(properties.model),''),'unknown') model, count() n FROM events WHERE event='ai_message_completed' AND coalesce(toString(properties.model),'')!='' {env_filter} " + _RANGE + " GROUP BY model ORDER BY n DESC LIMIT 8"
+    ),
+    "acquisition_channel": Metric(
+        key="acquisition_channel", title="Signups by channel", shape="rows", unit="",
+        definition="Where new signups came from, by first-touch UTM source (no source shows as 'direct').",
+        caveat="Empty until first-touch UTM capture ships to production.",
+        sql="SELECT if(coalesce(toString(properties.utm_source),'')='','direct',toString(properties.utm_source)) src, count() n FROM events WHERE event='auth_signup_succeeded' {env_filter} " + _RANGE + " GROUP BY src ORDER BY n DESC LIMIT 20"
+    ),
+    "signup_trigger_breakdown": Metric(
+        key="signup_trigger_breakdown", title="Signups by trigger", shape="rows", unit="",
+        definition="Which in-app gate or CTA drove each signup (guest locked feature, dashboard prompt, free-credit bonus, or direct).",
+        caveat="Empty until signup_trigger ships to production.",
+        sql="SELECT coalesce(nullIf(toString(properties.signup_trigger),''),'direct') trigger, count() n FROM events WHERE event='auth_signup_succeeded' {env_filter} " + _RANGE + " GROUP BY trigger ORDER BY n DESC LIMIT 10"
+    ),
+    "ai_edits": Metric(
+        key="ai_edits", title="AI outputs manually edited", unit="", good_when_up=False,
+        definition="How many times users manually edited a file the AI had just written — the real 'did they accept it' signal.",
+        caveat="Empty until ai_response_edited ships to production.",
+        sql="SELECT count() FROM events WHERE event='ai_response_edited' {env_filter} " + _RANGE
+    ),
+    "session_depth": Metric(
+        key="session_depth", title="Typical session length", unit="min",
+        definition="Median focused (active-tab) time users spend in the IDE per session.",
+        caveat="Empty until ide_session_ended ships to production.",
+        sql="SELECT round(median(toFloat64OrNull(toString(properties.duration_active_ms)))/60000,1) FROM events WHERE event='ide_session_ended' {env_filter} " + _RANGE
+    ),
+    "cold_preview_reliability": Metric(
+        key="cold_preview_reliability", title="Preview reliability (cold only)", unit="%",
+        definition="Preview success rate counting only cold starts — strips out pre-warmed previews that load instantly and flatter the headline.",
+        caveat="Empty until cold_start ships on preview_ready.",
+        sql="SELECT round(100.0*countIf(event='preview_ready' AND toString(properties.cold_start)='true')/nullIf(countIf(event='preview_start_requested' AND toString(properties.was_prepared)='false'),0),1) FROM events WHERE event IN ('preview_ready','preview_start_requested') {env_filter} " + _RANGE
     )
 };
 
@@ -729,6 +800,353 @@ async def:priv ai_insights(context: dict) -> dict {
     } except Exception as e {
         return {"available": False, "reason": str(e)[:160], "text": ""};
     }
+}
+
+# ---------------------------------------------------------------------------
+# AI-first builder (v0, registry-only) — NL question -> which verified metrics
+# answer it -> fetch them (reusing metric(): env filter + cache) -> tile specs.
+# The LLM only SELECTS from existing keys; it never writes SQL. Hallucinated
+# keys are dropped server-side, so a build can only ever run verified queries.
+# ---------------------------------------------------------------------------
+
+# Deterministic tile choice per metric. Most fall out of shape + unit; the few
+# exceptions (donut/table/vbar) are pinned by key so we don't touch the registry.
+glob _TILE_OVERRIDE: dict = {
+    "signup_method": "donut", "model_mix": "donut", "feature_table": "table",
+    "peak_hours": "vbar", "requests_daily": "vbar"
+};
+
+def _tile_for(m: Metric) -> str {
+    ov = _TILE_OVERRIDE.get(m.key, "");
+    if ov {
+        return str(ov);
+    }
+    if m.shape == "funnel" {
+        return "funnel";
+    }
+    if m.shape == "retention" {
+        return "retention";
+    }
+    if m.shape == "lifecycle" {
+        return "stackbar";
+    }
+    if m.shape == "series" {
+        return "line" if (m.unit == "%" or m.unit == "s") else "area";
+    }
+    if m.shape == "rows" {
+        return "bars";
+    }
+    return "gauge" if (m.unit == "%") else "stat";
+}
+
+# The grounding doc: every metric the planner is allowed to pick from.
+def _catalog() -> str {
+    lines = [];
+    for k in METRICS.keys() {
+        m = METRICS[k];
+        lines = lines + ["- " + m.key + ": " + m.title + " — " + m.definition + " [" + m.shape + "]"];
+    }
+    return "\n".join(lines);
+}
+
+# Schema grounding for the dynamic (mode=query) path — lets the LLM write HogQL
+# against real events/columns instead of hallucinating. Curated from EVENT_CATALOG.md.
+glob _SCHEMA_DOC: str = "TABLE events — one row per tracked product event.\n"
+    + "Columns: event (String), timestamp (DateTime), person_id (String — the user), properties (JSON). EVERY event/person field MUST be written as properties.<name> (e.g. properties.plan, properties.model, properties.provider, properties.cost_usd) — a bare identifier like `plan` or a raw `properties` reference is NOT a column and errors with 'cannot resolve field'.\n"
+    + "HogQL idioms: text presence = coalesce(toString(properties.X),'') != '' ; numbers = toFloat64OrNull(toString(properties.X)) ; per-user rows = GROUP BY person_id.\n"
+    + "TIME (HogQL, evaluated by ClickHouse — no date math needed): today = toDate(timestamp) = today() ; yesterday = toDate(timestamp) = yesterday() ; this week = timestamp >= toStartOfWeek(now()) ; this month = timestamp >= toStartOfMonth(now()) ; last N days = timestamp >= now() - INTERVAL N DAY ; a specific date = toDate(timestamp) = toDate('YYYY-MM-DD').\n"
+    + "ALWAYS put the literal placeholder {env} in the main WHERE, e.g. WHERE {env} AND event='ai_message_sent'. The server replaces {env} with the production environment filter.\n"
+    + "CORE events (name — key props):\n"
+    + "auth_signup_succeeded (method — password/google/github; signup_trigger — guest_locked_feature/free_signup_bonus/dashboard_prompt/direct; NO 'provider' property) · auth_succeeded (method, is_new_user) · ide_opened · ide_session_ended (duration_active_ms — FOCUSED time not wall-clock; files_touched; previews_run; ended_reason) · project_created (source, project_type, files_count — files_count only on folder_upload)\n"
+    + "ai_message_sent (prompt_length, attached_files_count, task_category, model, conversation_id, turn_number) · ai_message_completed (duration_ms, files_changed, response_length, model, conversation_id, turn_number, message_id) · ai_message_failed (reason, at_phase, duration_ms, model, conversation_id, turn_number) · ai_message_reverted (conversation_id, turn_number) · ai_response_rated (rating up/down, message_id) · ai_issue_reported (category, message_id) · ai_response_edited (message_id, time_to_edit_ms, files_changed — a manual edit of AI-written code = the real acceptance signal)\n"
+    + "AI THREADING: conversation_id + turn_number link a chat thread — first-try success = turn_number=1 with an ai_message_completed and no later turn in the same conversation_id. properties.model is the model that ACTUALLY ran (now on ai_message_completed, not only ai_generation_metered).\n"
+    + "preview_start_requested (was_prepared) · preview_ready (duration_ms, cold_start — true=cold; filter cold_start to de-inflate reliability) · preview_start_failed (reason)\n"
+    + "deploy_sandbox_clicked · deploy_sandbox_succeeded (status) · deploy_production_clicked · deploy_production_succeeded (status)\n"
+    + "git_commit_succeeded · github_connect_succeeded · project_shared · export_downloaded\n"
+    + "ai_generation_metered (cost_usd, model, project_id) · upgrade_checkout_clicked (plan — INTENT only) · upgrade_checkout_succeeded (plan, plan_from, amount_usd, interval, is_first_upgrade, stripe_customer_id — the COMPLETED upgrade; paid conversion = succeeded/clicked) · subscription_canceled (plan_from, mrr_delta, days_active) · subscription_downgraded (plan_from, plan_to, mrr_delta) · topup_checkout_clicked (pack)\n"
+    + "REVENUE: MRR-from-events = SUM over upgrade_checkout_succeeded.amount_usd minus churned; but the authoritative live MRR is Stripe (billing summary: mrr, active_subs) — properties.cost_usd is internal COST, never revenue.\n"
+    + "SESSIONS: properties.$session_id groups events into one browser session (a rough session-length proxy); ide_session_ended.duration_active_ms is the real focused time per IDE session.\n"
+    + "Person/event props for identity: properties.email, properties.display_name, properties.name, properties.plan (free/builder/pro). properties.method on auth_signup_succeeded is the LOGIN method (password/google/github) — NOT a marketing channel. properties.provider / properties.auth_provider do NOT exist.\n"
+    + "ACQUISITION CHANNEL: first-touch UTM/referrer are captured. On CLIENT events they ride as super-properties (properties.utm_source/utm_medium/utm_campaign/utm_content/referrer/initial_referring_domain/landing_path); they are ALSO threaded explicitly onto the server-emitted auth_signup_succeeded, so channel attribution for SIGNUPS must read utm_* off auth_signup_succeeded (empty = direct/no campaign). Use these (NOT login method) for channel/campaign attribution.\n"
+    + "PRIVACY: prompt/message TEXT is never stored — there is no message-content column; never try to read it.\n"
+    + "person_id is the stable user id (email/display_name may be sparse). Use LIMIT for lists (server caps at 200).";
+
+obj QueryPlan {
+    # Field order = byLLM generation order. chart/good_up (which decide rendering) come
+    # BEFORE the verbose sql so a tight token budget only ever truncates trailing prose,
+    # never the tile type. (Fixed the D5/D6 compare→table truncation misfire.)
+    has mode: str = "clarify";
+    has keys: list[str] = [];
+    has chart: str = "table";
+    has good_up: bool = True;
+    has title: str = "";
+    has sql: str = "";
+    has reasoning: str = "";
+    has reply: str = "";
+    has clarify: str = "";
+}
+sem QueryPlan = "A plan for how to answer the user's question: reuse verified metrics, write a custom query, or ask for clarification.";
+sem QueryPlan.good_up = "For stat/compare/gauge charts only: True if a HIGHER number is better (signups, active users, revenue, success rate), False if a LOWER number is better (failures, errors, latency, churn, cost, reverts). Controls whether an increase is shown as good (green) or bad (red).";
+sem QueryPlan.reasoning = "One short sentence for a developer debugging this result: why you chose this mode, and any assumption you made about the time window or scope (e.g. 'used the selected date range, not literally today' or 'wrote a per-user query since no metric lists users').";
+sem QueryPlan.mode = "'metrics' when one or more CATALOG metrics fully answer the question; 'query' when you must write a custom read-only HogQL SELECT because the catalog lacks the exact cut (a specific list/table, a per-user or per-model breakdown, an ad-hoc filter); 'clarify' when the question is too vague, impossible, or off-topic.";
+sem QueryPlan.keys = "mode=metrics ONLY: catalog keys taken VERBATIM from the leading 'key' column, most relevant first, at most 6. Empty otherwise.";
+sem QueryPlan.sql = "mode=query ONLY: exactly ONE read-only HogQL SELECT/WITH answering the question, using only events/columns from the SCHEMA. MUST contain the literal {env} in its main WHERE. Never INSERT/ALTER/UPDATE/DELETE/DROP. Add an explicit LIMIT for any list. Empty otherwise.";
+sem QueryPlan.chart = "mode=query ONLY: how to display the result — 'stat' (a single number: a count/total/percentage — SELECT exactly one aggregate), 'compare' (a single number VERSUS a comparison period, e.g. 'today vs yesterday' or 'this week vs last week' — SELECT exactly TWO aggregates in ONE row and alias them EXACTLY `current_value` and `previous_value`: current_value = the current / more-recent period the user names, previous_value = the comparison period. Column order does not matter — they are read by alias. E.g. countIf(<current-period predicate>) AS current_value, countIf(<previous-period predicate>) AS previous_value. Renders as a big number with a ±% delta badge), 'table' (multi-column rows, the default for lists/details), 'bars' (exactly 2 cols: text label + number, a ranking), 'line' or 'area' (2 cols: date + number, a trend), 'vbar' (2 cols: category + number, a distribution). The query's SELECT column order must match.";
+sem QueryPlan.title = "A short (<= 6 word) title for the result.";
+sem QueryPlan.reply = "One or two plain-English sentences telling a decision-maker what this shows. No preamble. Empty for clarify.";
+sem QueryPlan.clarify = "mode=clarify ONLY: ONE friendly clarifying question or a short note on what is missing. Empty otherwise.";
+
+def _plan_query(question: str, context: str) -> QueryPlan by INSIGHT_LLM(max_tokens=1400);
+sem _plan_query = "You are the planner for JacHammer's product-analytics dashboard (an AI-powered web IDE). Answer the user's question. FIRST prefer mode=metrics with catalog keys when a verified metric fits (never invent a key). If the question needs a cut the catalog does not have — a specific list, a per-user/per-model/per-project table, a custom breakdown or filter — use mode=query and WRITE a safe read-only HogQL SELECT against the SCHEMA, always including the {env} placeholder in the main WHERE and a LIMIT for lists. Use mode=clarify only when the question is genuinely too vague, off-topic, or impossible with the available events. CRITICAL — TIME WORDS: verified catalog metrics follow the dashboard's SELECTED DATE RANGE (given in the context), NOT any period named in the question. So if the question names a specific period (today, yesterday, this week, this month, last N days, a specific date) that is not identical to the selected range, you MUST use mode=query with an explicit HogQL timestamp filter for exactly that period (see the SCHEMA TIME idioms — today()/yesterday()/now()-INTERVAL/toStartOfWeek), and set chart='stat' for a single count. Do NOT answer a 'today'/'this week' question with a picker-range metric — that returns the whole selected range and silently mislabels it. COMPARISONS: for an explicit 'X vs Y' question (today vs yesterday, this week vs last week, this month vs last month), use mode=query with chart='compare' — SELECT two aggregates in one row (current period first, then the comparison period, each via countIf/sumIf with the matching time predicate) — and set good_up to whether higher is better for that metric. HARD RULE: whenever your query SELECTs the aliases current_value and previous_value, chart MUST be 'compare' — NEVER 'table' or 'stat' (only 'compare' renders the ±% delta). For any latency / duration / response-time comparison, or any 'lower is better' metric (failures, errors, churn, cost, reverts), set good_up=False. HONESTY — CONCEPT GAPS: before mapping a question onto any metric or field, verify the SPECIFIC concept asked about is actually measured, not merely similar wording. Distinctions to respect (the mapping now EXISTS for each — use the right field, don't fall back to the wrong one): request/response LATENCY = properties.duration_ms, whereas session length/time-on-task = ide_session_ended.duration_active_ms (do NOT use duration_ms for session length); acquisition CHANNEL = properties.utm_source/utm_medium/utm_campaign/referrer (NOT login method properties.method); FIRST-TRY success = turn_number=1 ai_message_completed with no later turn in the same conversation_id (NOT the overall completion rate gen_success); a COMPLETED upgrade = upgrade_checkout_succeeded (NOT the intent-only upgrade_checkout_clicked); REVENUE = Stripe MRR (billing summary) or SUM(upgrade_checkout_succeeded.amount_usd) (NOT internal properties.cost_usd). Also verify a property lives on the event you query — properties.model is on BOTH ai_generation_metered AND ai_message_completed now. If a concept genuinely has NO matching event/property, do NOT silently substitute a plausible proxy — use mode=clarify: name the closest honest proxy by its TRUE definition AND state what is not tracked. If you proceed with a proxy, the title/reply must describe it in its own honest terms.";
+sem _plan_query.question = "The user's natural-language question about their product metrics.";
+sem _plan_query.context = "Three sections. SELECTED RANGE: the dashboard's current date window that picker-range metrics use. CATALOG: verified pre-built metrics, one per line as '- key: title — definition [shape]' — for mode=metrics, choose keys only from here. SCHEMA: the events-table columns, available events + props, and HogQL idioms (incl. TIME) — for mode=query, use only what appears here.";
+
+# Prepare an LLM-generated query for safe execution: read-only, single statement,
+# and — non-negotiable — inject the env filter (skipping it returns ~80% dev/preview
+# noise). Prefer the {env} placeholder; fall back to injecting into the first WHERE.
+def _prep_query_sql(sql: str, env: str) -> dict {
+    s: str = sql.strip().rstrip(";").strip();
+    low = s.lower();
+    if not (low.startswith("select") or low.startswith("with")) {
+        return {"ok": False, "error": "generated query was not a read-only SELECT/WITH"};
+    }
+    if ";" in s {
+        return {"ok": False, "error": "generated query had more than one statement"};
+    }
+    envx = env_expr(env);
+    if not envx {
+        envx = "1=1";
+    }
+    if "{env}" in s {
+        s = s.replace("{env}", envx);
+    } elif " where " in (" " + low + " ") {
+        idx = low.find(" where ");
+        s = s[:idx] + " WHERE " + envx + " AND " + s[idx + 7:];
+    } else {
+        return {"ok": False, "error": "generated query had no WHERE clause to env-filter"};
+    }
+    # Whitespace/newline-agnostic: the LLM writes "...DESC\nLIMIT 20", so a literal
+    # " limit " check misses it and appends a second LIMIT (ClickHouse honors the last →
+    # "top 20" silently becomes 200). Match the keyword itself.
+    if not re.search(r"(?i)\blimit\b", s) {
+        s = s + " LIMIT 200";
+    }
+    return {"ok": True, "sql": s};
+}
+
+# Shape a raw HogQL result (columns + rows) into a tile-data object the client
+# tiles already understand. table/bars read columns+rows; trends need an {x,y} series.
+def _col_index(cols: list, name: str) -> int {
+    i = 0;
+    for c in cols {
+        if str(c) == name {
+            return i;
+        }
+        i = i + 1;
+    }
+    return -1;
+}
+
+def _pct_delta(cur: any, prev: any) -> float | None {
+    try {
+        cf = float(str(cur));
+        pf = float(str(prev));
+        if pf == 0.0 {
+            return None;
+        }
+        return (cf - pf) / pf * 100.0;
+    } except Exception as e {
+        return None;
+    }
+}
+
+def _shape_ai_tile(res: dict, chart: str, date_from: str, date_to: str, env: str, q: str, good_up: bool) -> dict {
+    cols = res.get("columns", []);
+    rows = res.get("results", []);
+    meta = {
+        "definition": "Generated from your question: " + q,
+        "window": f"{date_from} → {date_to}",
+        "caveat": "AI-written query — not one of the verified tiles. Read as directional and check before acting. Env-filtered to the selection.",
+        "env": env, "unit": "", "good_when_up": good_up, "cached": False
+    };
+    out: dict = {"value": None, "series": [], "columns": cols, "rows": rows, "prev": None, "delta": None, "meta": meta};
+    rl = rows as list;
+    if chart == "stat" or chart == "gauge" {
+        if len(rl) > 0 {
+            r0 = rl[0] as list;
+            if len(r0) > 0 {
+                out["value"] = r0[0];
+            }
+        }
+    } elif chart == "compare" {
+        if len(rl) > 0 {
+            r0c = rl[0] as list;
+            colslist = cols as list;
+            ci = _col_index(colslist, "current_value");
+            pi = _col_index(colslist, "previous_value");
+            curv: any = None;
+            prevv: any = None;
+            if (ci >= 0) and (ci < len(r0c)) {
+                curv = r0c[ci];
+            } elif len(r0c) > 0 {
+                curv = r0c[0];
+            }
+            if (pi >= 0) and (pi < len(r0c)) {
+                prevv = r0c[pi];
+            } elif len(r0c) >= 2 {
+                prevv = r0c[1];
+            }
+            out["value"] = curv;
+            out["prev"] = prevv;
+            if (curv is not None) and (prevv is not None) {
+                out["delta"] = _pct_delta(curv, prevv);
+            }
+        }
+    } elif chart == "line" or chart == "area" or chart == "vbar" {
+        series = [];
+        for r in rl {
+            rl2 = r as list;
+            if len(rl2) >= 2 {
+                series = series + [{"x": rl2[0], "y": rl2[1]}];
+            }
+        }
+        out["series"] = series;
+    }
+    return out;
+}
+
+async def:priv ai_build(question: str, env: str, date_from: str, date_to: str) -> dict {
+    if not ANTH_KEY {
+        return {"answerable": False, "reply": "", "title": "", "tiles": [], "clarify": "AI planner unavailable — ANTHROPIC_API_KEY is not set on the server."};
+    }
+    q = question.strip();
+    if not q {
+        return {"answerable": False, "reply": "", "title": "", "tiles": [], "clarify": "Ask a question about your product metrics to build a view."};
+    }
+    env = _clamp_env(env);
+    context = "SELECTED RANGE (what picker-range metrics use): " + date_from + " → " + date_to + "\n\nCATALOG:\n" + _catalog() + "\n\nSCHEMA:\n" + _SCHEMA_DOC;
+    try {
+        plan = await asyncio.to_thread(_plan_query, q, context);
+    } except Exception as e {
+        print("=== ai_build planner error ===");
+        print(traceback.format_exc());
+        return {"answerable": False, "reply": "", "title": "", "tiles": [], "clarify": "Planner error: " + str(e)[:140]};
+    }
+    # Observability: log every plan so we can see what byLLM chose and optimize it.
+    print("[ai_build] mode=" + str(plan.mode) + " q=" + q[:90] + " keys=" + str(plan.keys) + " sql=" + str(plan.sql)[:200]);
+
+    # ---- mode: metrics — reuse verified registry tiles (env-filter + cache for free) ----
+    if plan.mode == "metrics" {
+        valid: list[str] = [];
+        for k in plan.keys {
+            ks = str(k);
+            if (ks in METRICS) and (ks not in valid) {
+                valid = valid + [ks];
+            }
+            if len(valid) >= 6 {
+                break;
+            }
+        }
+        if len(valid) == 0 {
+            return {"answerable": False, "reply": "", "title": str(plan.title), "tiles": [], "clarify": "I couldn't map that to the metrics we track. Try rephrasing, or ask for a specific list/breakdown."};
+        }
+        tasks = [];
+        for ks in valid {
+            tasks = tasks + [metric(ks, env, date_from, date_to, False)];
+        }
+        results = await asyncio.gather(*tasks);
+        tiles = [];
+        pk = [];
+        i = 0;
+        for ks in valid {
+            m = METRICS[ks];
+            ch = _tile_for(m);
+            wlabel = m.window if m.window else (date_from + " → " + date_to);
+            tiles = tiles + [{"key": ks, "title": m.title, "chart": ch, "data": results[i],
+                "recipe": {"kind": "metric", "ref": ks, "title": m.title, "chart": ch, "good_up": m.good_when_up}}];
+            pk = pk + [{"key": ks, "title": m.title, "window": wlabel}];
+            i = i + 1;
+        }
+        return {"answerable": True, "reply": str(plan.reply), "title": str(plan.title), "tiles": tiles, "clarify": "",
+            "plan": {"mode": "metrics", "reasoning": str(plan.reasoning), "metrics": pk, "sql": ""}};
+    }
+
+    # ---- mode: query — run the LLM's custom read-only HogQL (validated + env-injected) ----
+    if plan.mode == "query" {
+        prep = _prep_query_sql(str(plan.sql), env);
+        if not prep["ok"] {
+            return {"answerable": False, "reply": "", "title": str(plan.title), "tiles": [], "clarify": "I couldn't build a safe query for that (" + str(prep["error"]) + "). Try rephrasing.",
+                "plan": {"mode": "query", "reasoning": str(plan.reasoning), "metrics": [], "sql": str(plan.sql)}};
+        }
+        res = await asyncio.to_thread(run_hogql, str(prep["sql"]));
+        if "error" in res {
+            return {"answerable": False, "reply": "", "title": str(plan.title), "tiles": [], "clarify": "The generated query failed to run: " + str(res["error"])[:140] + ". Try rephrasing.",
+                "plan": {"mode": "query", "reasoning": str(plan.reasoning), "metrics": [], "sql": str(prep["sql"])}};
+        }
+        chart = str(plan.chart) if plan.chart else "table";
+        data = _shape_ai_tile(res, chart, date_from, date_to, env, q, plan.good_up);
+        ttl = str(plan.title) if plan.title else "Result";
+        return {"answerable": True, "reply": str(plan.reply), "title": ttl, "clarify": "",
+            "tiles": [{"key": "adhoc", "title": ttl, "chart": chart, "data": data,
+                "recipe": {"kind": "query", "ref": str(plan.sql), "title": ttl, "chart": chart, "good_up": plan.good_up}}],
+            "plan": {"mode": "query", "reasoning": str(plan.reasoning), "metrics": [], "sql": str(prep["sql"])}};
+    }
+
+    # ---- mode: clarify (or anything unrecognized) ----
+    clar = str(plan.clarify) if plan.clarify else "Could you be more specific about what you'd like to see?";
+    return {"answerable": False, "reply": "", "title": str(plan.title), "tiles": [], "clarify": clar,
+        "plan": {"mode": "clarify", "reasoning": str(plan.reasoning), "metrics": [], "sql": ""}};
+}
+
+# ---------------------------------------------------------------------------
+# Pinned dashboard — re-run saved "recipes" (a metric key OR a generated query)
+# so a pinned tile always shows LIVE data for the current env/range, not a frozen
+# snapshot. Recipes are produced by ai_build (tile.recipe) and stored client-side.
+# ---------------------------------------------------------------------------
+
+async def _run_pin(pin: dict, env: str, date_from: str, date_to: str) -> dict {
+    kind = str(pin.get("kind", ""));
+    title = str(pin.get("title", "Tile"));
+    chart = str(pin.get("chart", "stat"));
+    ref = str(pin.get("ref", ""));
+    good_up = pin.get("good_up", True) as bool;
+    if kind == "metric" {
+        if ref not in METRICS {
+            return {"title": title, "chart": chart, "data": {"value": None, "series": [], "columns": [], "rows": [], "error": "unknown metric '" + ref + "'", "meta": {}}};
+        }
+        m = METRICS[ref];
+        data = await metric(ref, env, date_from, date_to, False);
+        return {"title": title, "chart": _tile_for(m), "data": data};
+    }
+    if kind == "query" {
+        prep = _prep_query_sql(ref, env);
+        if not prep["ok"] {
+            return {"title": title, "chart": chart, "data": {"value": None, "series": [], "columns": [], "rows": [], "error": str(prep["error"]), "meta": {}}};
+        }
+        res = await asyncio.to_thread(run_hogql, str(prep["sql"]));
+        if "error" in res {
+            return {"title": title, "chart": chart, "data": {"value": None, "series": [], "columns": [], "rows": [], "error": str(res["error"])[:140], "meta": {}}};
+        }
+        data = _shape_ai_tile(res, chart, date_from, date_to, env, title, good_up);
+        return {"title": title, "chart": chart, "data": data};
+    }
+    return {"title": title, "chart": chart, "data": {"value": None, "series": [], "columns": [], "rows": [], "error": "unrecognized pin", "meta": {}}};
+}
+
+async def:priv run_pinned(pins: list, env: str, date_from: str, date_to: str) -> list {
+    env = _clamp_env(env);
+    if not (_valid_date(date_from) and _valid_date(date_to)) {
+        return [];
+    }
+    tasks = [];
+    for p in pins {
+        tasks = tasks + [_run_pin(p as dict, env, date_from, date_to)];
+    }
+    if not tasks {
+        return [];
+    }
+    results = await asyncio.gather(*tasks);
+    return list(results);
 }
 
 # ---------------------------------------------------------------------------

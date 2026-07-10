@@ -54,12 +54,13 @@ typescript = "^5.3.3"
 "@types/react" = "^18.2.0"
 "@types/react-dom" = "^18.2.0"
 
-[plugins.client.vite]
+[client.vite]
 plugins = ["tailwindcss()"]
 lib_imports = ["import tailwindcss from '@tailwindcss/vite'"]
 
 # Run as a single in-process gateway (metrics_sv is imported in-process by main.jac).
-# Without this the scale layer auto-detects metrics_sv as a separate microservice and
-# spawns it as a subprocess with the venv jac (which lacks jaclang.scale.memory) -> crash.
-[plugins.scale.microservices]
+# Without this the scale layer auto-detects metrics_sv + billing_sv as separate
+# microservices and spawns them as subprocesses -> byllm/import crash.
+# (Config flattened in jaclang: [plugins.scale.microservices] -> [scale.microservices].)
+[scale.microservices]
 enabled = false
