@@ -34,7 +34,17 @@ docs.jaseci.org/community/breaking-changes: the **pluggy plugin/hook system was 
   it). `jac check` on 0.31 is stricter — a couple pre-existing `E1053` `len(<any>)` warnings on `metrics_sv.jac`
   are runtime-harmless and don't block `jac start`.
 - **Auth changed**: tokens are now ~221 chars and the OLD `.jac/data` admin hash fails login (401 "Invalid
-  credentials") under new jaclang — re-seed a fresh user (`/user/register`) if login 401s.
+  credentials") under new jaclang. **New jaclang also auto-seeds a credential-LESS `admin`** on a fresh DB
+  (`requires_password_reset:true`, empty `credentials`) — so `/user/register admin` returns `IDENTITY_TAKEN`
+  AND login with the password 401s ("Invalid credentials"). **Fix: delete the bootstrap admin, then register:**
+  `docker exec dash-mongo mongosh jac_db --quiet --eval 'db.users.deleteOne({"identities.value_normalized":"admin","requires_password_reset":true})'`
+  then the `/user/register` one-liner below. (`__guest__`/`__system__` are also auto-seeded — leave them.)
+- **Mongo backend (DEDICATED, ⚠ 2026-07-11)**: the dashboard has its OWN mongo — **`dash-mongo` on host port
+  27018** (`docker run -d --name dash-mongo -p 27018:27017 -v dash-mongo-data:/data/db mongo:7`),
+  `MONGODB_URI=mongodb://localhost:27018`. Was previously sharing `jac-ide-mongo` (27017) → the same `jac_db` +
+  user table as the jac-ide app; now isolated. If `.env` MONGODB_URI ever points back at 27017 the dashboard
+  will co-mingle users/graph with jac-ide again. No `.jac/data` SQLite (Mongo is set) — persistence lives in
+  dash-mongo's `jac_db._anchors` (graph) + `.users`.
 - **Redis**: use `dash-redis` (`docker run -d --name dash-redis -p 6379:6379 redis:7-alpine`),
   `REDIS_URL=redis://localhost:6379`. Cache degrades to a no-op if Redis is unreachable (app still works uncached).
 - **byLLM gotcha still live**: byLLM/litellm inject a default `temperature`, which Opus 4.7+/Sonnet 5 reject.
@@ -51,10 +61,12 @@ docs.jaseci.org/community/breaking-changes: the **pluggy plugin/hook system was 
 ## Dev up (local)
 ```bash
 docker start dash-redis 2>/dev/null || docker run -d --name dash-redis -p 6379:6379 redis:7-alpine
-set -a; source .env; set +a
+docker start dash-mongo 2>/dev/null || docker run -d --name dash-mongo -p 27018:27017 -v dash-mongo-data:/data/db mongo:7
+set -a; source .env; set +a                # MONGODB_URI=mongodb://localhost:27018 (dedicated dash-mongo)
 export JAC_BUN="$HOME/.bun/bin/bun"
 jac start main.jac --port=8010     # native dev jac. :8000 is often the jac-ide app — use a free port.
-# login 401? re-seed a fresh admin:
+# login 401 / IDENTITY_TAKEN? new jaclang auto-seeds a credential-less admin — delete it, THEN register:
+# docker exec dash-mongo mongosh jac_db --quiet --eval 'db.users.deleteOne({"identities.value_normalized":"admin","requires_password_reset":true})'
 # curl -X POST :8010/user/register -H 'Content-Type: application/json' \
 #   -d '{"identities":[{"type":"username","value":"admin"},{"type":"email","value":"admin@jaseci.org"}],"credential":{"type":"password","password":"jachammer"}}'
 ```
@@ -187,10 +199,21 @@ Tiles in `components/dash/ChartTiles.cl.jac` (+ `StatTile`). Pick by job, NOT by
   `toStartOfWeek` ≤186d · `toStartOfMonth` beyond). Trends follow the range; retention/lifecycle keep cohort windows.
 - **Lifecycle** tile (native LifecycleQuery, stacked bar) on Advanced; **deploy** intent + honest success-rate
   on System Health; real **`billing_sv.jac`** Stripe MRR→margin on Cost (honest "—" without a key).
-- **Data dictionary** (searchable 26-event table) + **saved views** (localStorage chips) on Settings/top bar.
+- **Data dictionary** (searchable 26-event table) + **saved views** on Settings/top bar.
 - **Chart polish**: Y-axis no longer clipped (margin), hbar labels moved above bars (no truncation).
 - **Cleanup**: removed dead `StubPage`, `STUB_NOTES`, `_W10`; all 11 pages route to real components (Settings is
   the routing fallback).
+
+## Persistence model (⚠ 2026-07-11 — per-account, not per-browser)
+- **Server graph (per-user, `def:priv`, survives refresh + restart + other browsers)**: **threads** (`Thread`),
+  **search history** (`SearchEntry`), **pins/"My Dashboard"** (`Pin`), **saved views** (`SavedView`) — all hang
+  off the logged-in user's `root` in `metrics_sv.jac`. Endpoints: `thread_*`, `pin_list/pin_add/pin_remove`,
+  `view_list/view_add/view_remove`. Pins were localStorage until 2026-07-11; now server-backed (recipes re-run
+  live via `run_pinned`). Client calls map endpoints **POSITIONALLY** (arg order, not name — `thread_save(tid,
+  title, msgs)` works though the server param is `messages`).
+- **Browser localStorage (per-browser, NOT the account)**: `jac_token` (auth) + `jachammer_active_page`
+  (AppShell persists the current page so a **refresh returns to the same page** instead of resetting to Overview
+  — `_initial_page()`/`_persist_page()`). No more `jachammer_pins`/`jachammer_views` keys.
 
 ## Decision-review batch (honesty fixes + hardcoded-tile resolution; verified via curl + browser)
 Prompted by a per-tile "does this help a decision?" review. Fixes:
