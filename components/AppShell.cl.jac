@@ -59,6 +59,29 @@ glob PAGE_TITLES: dict = {
     "health": "System Health", "settings": "Settings & Data"
 };
 
+# Persist the active page across refresh (localStorage) so a reload returns you to
+# the same page — e.g. the Ask builder with its last thread — instead of resetting to Overview.
+glob _PAGE_KEY: str = "jachammer_active_page";
+
+def _initial_page() -> str {
+    try {
+        raw = localStorage.getItem(_PAGE_KEY);
+        if raw and PAGE_TITLES[raw] {
+            return raw as str;
+        }
+    } except Exception as e {
+        return "overview";
+    }
+    return "overview";
+}
+def _persist_page(pg: str) {
+    try {
+        localStorage.setItem(_PAGE_KEY, pg);
+    } except Exception as e {
+        return;
+    }
+}
+
 def NavButton(label: str, dot: str, page: str, active: bool, on_select: Callable[[str], None]) -> JsxElement {
     def handle(e: MouseEvent) {
         on_select(page);
@@ -74,10 +97,11 @@ def:pub AppShell(on_logout: Callable[[], None]) -> JsxElement {
     has date_from: str = iso_days_ago(30);
     has date_to: str = iso_tomorrow();
     has refresh_n: int = 0;
-    has active_page: str = "overview";
+    has active_page: str = _initial_page();
 
     def go(pg: str) {
         active_page = pg;
+        _persist_page(pg);
     }
     def on_env(v: str) {
         env = v;
@@ -88,6 +112,7 @@ def:pub AppShell(on_logout: Callable[[], None]) -> JsxElement {
     }
     def on_restore(pg: str, e: str, f: str, t: str) {
         active_page = pg;
+        _persist_page(pg);
         env = e;
         date_from = f;
         date_to = t;
