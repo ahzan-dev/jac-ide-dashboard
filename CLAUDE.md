@@ -45,8 +45,10 @@ docs.jaseci.org/community/breaking-changes: the **pluggy plugin/hook system was 
   user table as the jac-ide app; now isolated. If `.env` MONGODB_URI ever points back at 27017 the dashboard
   will co-mingle users/graph with jac-ide again. No `.jac/data` SQLite (Mongo is set) — persistence lives in
   dash-mongo's `jac_db._anchors` (graph) + `.users`.
-- **Redis**: use `dash-redis` (`docker run -d --name dash-redis -p 6379:6379 redis:7-alpine`),
-  `REDIS_URL=redis://localhost:6379`. Cache degrades to a no-op if Redis is unreachable (app still works uncached).
+- **Redis (DEDICATED, ⚠ 2026-07-11)**: `dash-redis` on host port **6380** (jac-ide-redis owns 6379), `-v
+  dash-redis-data:/data`, `REDIS_URL=redis://localhost:6380`. Cache degrades to a no-op if Redis is unreachable
+  (app still works uncached). **`./dev-services.sh` brings up both dash-mongo + dash-redis** (idempotent,
+  self-heals a wrong port map; `--reset-db`/`--flush-redis`/`--clean`) — run it before `jac start`.
 - **byLLM gotcha still live**: byLLM/litellm inject a default `temperature`, which Opus 4.7+/Sonnet 5 reject.
   `INSIGHT_LLM` defaults to **`claude-haiku-4-5`** (accepts it; override via `INSIGHTS_MODEL`). The old
   pydantic / `rm -rf .jac` gotcha is now moot (byllm is core, not a stale project venv).
@@ -60,9 +62,8 @@ docs.jaseci.org/community/breaking-changes: the **pluggy plugin/hook system was 
 
 ## Dev up (local)
 ```bash
-docker start dash-redis 2>/dev/null || docker run -d --name dash-redis -p 6379:6379 redis:7-alpine
-docker start dash-mongo 2>/dev/null || docker run -d --name dash-mongo -p 27018:27017 -v dash-mongo-data:/data/db mongo:7
-set -a; source .env; set +a                # MONGODB_URI=mongodb://localhost:27018 (dedicated dash-mongo)
+./dev-services.sh                          # idempotent: dash-mongo (:27018) + dash-redis (:6380), waits for ready
+set -a; source .env; set +a                # MONGODB_URI=...27018, REDIS_URL=...6380 (both dedicated)
 export JAC_BUN="$HOME/.bun/bin/bun"
 jac start main.jac --port=8010     # native dev jac. :8000 is often the jac-ide app — use a free port.
 # login 401 / IDENTITY_TAKEN? new jaclang auto-seeds a credential-less admin — delete it, THEN register:
