@@ -854,7 +854,8 @@ def _catalog() -> str {
 glob _SCHEMA_DOC: str = "TABLE events — one row per tracked product event.\n"
     + "Columns: event (String), timestamp (DateTime), person_id (String — the user), properties (JSON). EVERY event/person field MUST be written as properties.<name> (e.g. properties.plan, properties.model, properties.provider, properties.cost_usd) — a bare identifier like `plan` or a raw `properties` reference is NOT a column and errors with 'cannot resolve field'.\n"
     + "HogQL idioms: text presence = coalesce(toString(properties.X),'') != '' ; numbers = toFloat64OrNull(toString(properties.X)) ; per-user rows = GROUP BY person_id.\n"
-    + "TIME (HogQL, evaluated by ClickHouse — no date math needed): today = toDate(timestamp) = today() ; yesterday = toDate(timestamp) = yesterday() ; this week = timestamp >= toStartOfWeek(now()) ; this month = timestamp >= toStartOfMonth(now()) ; last N days = timestamp >= now() - INTERVAL N DAY ; a specific date = toDate(timestamp) = toDate('YYYY-MM-DD').\n"
+    + "AGGREGATION — the #1 cause of failed queries is a CASE without ELSE. RULES: (a) NEVER write 'CASE WHEN cond THEN x END' without an ELSE (HogQL compiles it to a multiIf that PostHog rejects). (b) For a CONDITIONAL or per-category count/sum, use countIf(cond) / sumIf(cond, x) — e.g. to split deploys by type: SELECT person_id, countIf(event='deploy_production_succeeded') AS prod, countIf(event='deploy_sandbox_succeeded') AS sandbox FROM events WHERE {env} AND event IN ('deploy_production_succeeded','deploy_sandbox_succeeded') GROUP BY person_id. Use CASE ONLY to bucket a value into named ranges, and then it MUST end with 'ELSE <fallback>' (e.g. CASE WHEN n=0 THEN '0' WHEN n<=5 THEN '1-5' ELSE '6+' END). (c) For 'how many events per user' after GROUP BY person_id use count() — NEVER COUNT(DISTINCT person_id) (always 1 within a person's group). Count distinct USERS only WITHOUT grouping by person_id: count(DISTINCT person_id). So 'list users who did X' = SELECT person_id, count() AS n FROM events WHERE {env} AND event IN (...) GROUP BY person_id ORDER BY n DESC.\n"
+    + "TIME (HogQL, evaluated by ClickHouse — no date math needed): today = toDate(timestamp) = today() ; yesterday = toDate(timestamp) = yesterday() ; this week = timestamp >= toStartOfWeek(now()) ; this month = timestamp >= toStartOfMonth(now()) ; last N days = timestamp >= now() - INTERVAL N DAY ; a specific date = toDate(timestamp) = toDate('YYYY-MM-DD') ; weekday = toDayOfWeek(timestamp) (1=Mon..7=Sun — do NOT use formatDateTime('%A')) ; hour of day = toHour(timestamp) ; day bucket for trends = toDate(timestamp).\n"
     + "ALWAYS put the literal placeholder {env} in the main WHERE, e.g. WHERE {env} AND event='ai_message_sent'. The server replaces {env} with the production environment filter.\n"
     + "CORE events (name — key props):\n"
     + "auth_signup_succeeded (method — password/google/github; signup_trigger — guest_locked_feature/free_signup_bonus/dashboard_prompt/direct; NO 'provider' property) · auth_succeeded (method, is_new_user) · ide_opened · ide_session_ended (duration_active_ms — FOCUSED time not wall-clock; files_touched; previews_run; ended_reason) · project_created (source, project_type, files_count — files_count only on folder_upload)\n"
@@ -1015,6 +1016,271 @@ def _shape_ai_tile(res: dict, chart: str, date_from: str, date_to: str, env: str
     return out;
 }
 
+# ---------------------------------------------------------------------------
+# Search history — per-user (def:priv runs against the caller's root, so each
+# user's searches are isolated). Every answered question is upserted with its
+# headline value + timestamp, so a re-run can show "what changed", and recent
+# questions drive the dynamic suggestion chips.
+# ---------------------------------------------------------------------------
+
+node SearchEntry {
+    has question: str;
+    has last_value: float | None = None;   # comparable headline of the last result
+    has last_kind: str = "none";           # "value" (scalar) | "rows" (row count) | "none"
+    has last_ts: str = "";                 # "YYYY-MM-DD HH:MM" UTC
+    has run_count: int = 0;
+}
+
+# The single comparable number for a result: first scalar value, else row count.
+def _result_headline(tiles: list) -> dict {
+    if not tiles {
+        return {"value": None, "kind": "none"};
+    }
+    t0 = (tiles as list)[0] as dict;
+    d = t0.get("data", {}) as dict;
+    v = d.get("value");
+    if v is not None {
+        try {
+            return {"value": float(str(v)), "kind": "value"};
+        } except Exception as e {
+            return {"value": None, "kind": "none"};
+        }
+    }
+    rows = d.get("rows", []);
+    if rows and isinstance(rows, list) {
+        return {"value": float(len(rows as list)), "kind": "rows"};
+    }
+    return {"value": None, "kind": "none"};
+}
+
+# Upsert this question's entry; return the PREVIOUS headline (+ the new one) so the
+# client can render "was X → now Y".
+def _save_search(question: str, value: any, kind: str) -> dict {
+    q = question.strip();
+    fval: float | None = None;
+    if value is not None {
+        try {
+            fval = float(str(value));
+        } except Exception as e {
+            fval = None;
+        }
+    }
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M");
+    for e in [root -->][?:SearchEntry] {
+        if e.question == q {
+            prev_v = e.last_value;
+            prev_ts = e.last_ts;
+            e.last_value = fval;
+            e.last_kind = kind;
+            e.last_ts = now;
+            e.run_count = e.run_count + 1;
+            return {"prev_value": prev_v, "prev_ts": prev_ts, "new_value": fval, "kind": kind, "is_new": False, "run_count": e.run_count};
+        }
+    }
+    root ++> SearchEntry(question=q, last_value=fval, last_kind=kind, last_ts=now, run_count=1);
+    return {"prev_value": None, "prev_ts": "", "new_value": fval, "kind": kind, "is_new": True, "run_count": 1};
+}
+
+# The user's saved searches, newest first — drives the "Recent" chips + history list.
+def:priv search_history() -> list {
+    out: list[dict] = [];
+    for e in [root -->][?:SearchEntry] {
+        out = out + [{"question": e.question, "last_value": e.last_value, "last_kind": e.last_kind, "last_ts": e.last_ts, "run_count": e.run_count}];
+    }
+    out.sort(key=lambda r: dict : str(r["last_ts"]), reverse=True);
+    return out;
+}
+
+# "What to explore next", tiered like a product owner thinks — drill into what they
+# see AND surface blind spots. From a 'signups' search: ~25% deeper, ~25% adjacent,
+# ~50% entirely different product areas they haven't touched. (byLLM, ≤2 params.)
+obj Suggestions {
+    has deeper: list[str] = [];
+    has related: list[str] = [];
+    has different: list[str] = [];
+}
+sem Suggestions = "Next analytics questions to explore, tiered from drill-down to blind-spot discovery.";
+sem Suggestions.deeper = "Exactly 3 drill-downs / close variants of the user's MOST RECENT topic — a breakdown, a comparison, or a time-scoped version of the same thing.";
+sem Suggestions.related = "Exactly 3 questions one step ADJACENT to that topic — a neighboring metric that adds context (e.g. from signups → activation, retention).";
+sem Suggestions.different = "Exactly 6 questions about COMPLETELY DIFFERENT areas of the product the user has NOT asked about — deliberate blind-spot coverage. If they only looked at signups, span AI quality, response latency, cost/spend, feature adoption, preview reliability, deploys, revenue, etc.";
+
+def _suggest_next(recent: str, catalog: str) -> Suggestions by INSIGHT_LLM(max_tokens=650);
+sem _suggest_next = "You are an analytics guide for a PRODUCT OWNER of an AI web-IDE. Given their RECENT questions and the metrics CATALOG, propose what to explore next in THREE tiers so they both go deep and discover blind spots: deeper = 3 drill-downs on their most recent topic; related = 3 adjacent metrics one step away; different = 6 questions about ENTIRELY DIFFERENT product areas they have NOT asked about (the biggest tier on purpose — a good product owner needs reminding of the areas they're neglecting, not just more of what they're already looking at). Each question <= 8 words, natural (as a user would type), answerable from the catalog/events, and NEVER a repeat of their recent questions. Spread 'different' across distinct areas — don't cluster.";
+sem _suggest_next.recent = "The user's recent questions, newest first, one per line.";
+sem _suggest_next.catalog = "Available metrics, one per line.";
+
+async def:priv suggest_next() -> dict {
+    empty = {"deeper": [], "related": [], "different": []};
+    if not ANTH_KEY {
+        return empty;
+    }
+    recents: list[dict] = [];
+    for e in [root -->][?:SearchEntry] {
+        recents = recents + [{"q": e.question, "ts": e.last_ts}];
+    }
+    if len(recents) == 0 {
+        return empty;
+    }
+    recents.sort(key=lambda r: dict : str(r["ts"]), reverse=True);
+    lines = [];
+    i = 0;
+    for r in recents {
+        if i < 8 {
+            lines = lines + [str(r["q"])];
+            i = i + 1;
+        }
+    }
+    try {
+        s = await asyncio.to_thread(_suggest_next, "\n".join(lines), _catalog());
+        return {"deeper": list(s.deeper), "related": list(s.related), "different": list(s.different)};
+    } except Exception as e {
+        return empty;
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Conversation threads — per-user (def:priv → caller's root). Each thread stores
+# the RENDERED messages as a snapshot (frozen numbers, like a chat log), so
+# reopening shows exactly what was said, not a live re-run.
+# ---------------------------------------------------------------------------
+
+node Thread {
+    has title: str = "New chat";
+    has created_at: str = "";
+    has updated_at: str = "";
+    has messages: list = [];       # the client's message dicts (role/text/tiles/plan/changed)
+}
+
+def:priv thread_list() -> list {
+    out: list[dict] = [];
+    for t in [root -->][?:Thread] {
+        out = out + [{"id": jid(t), "title": t.title, "updated_at": t.updated_at, "count": len(t.messages)}];
+    }
+    out.sort(key=lambda r: dict : str(r["updated_at"]), reverse=True);
+    return out;
+}
+
+def:priv thread_get(thread_id: str) -> dict {
+    for t in [root -->][?:Thread] {
+        if jid(t) == thread_id {
+            return {"id": jid(t), "title": t.title, "messages": t.messages};
+        }
+    }
+    return {"id": "", "title": "", "messages": []};
+}
+
+# Upsert: create when thread_id is empty (returns the new id), else update in place.
+def:priv thread_save(thread_id: str, title: str, messages: list) -> dict {
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M");
+    ttl = title if title else "New chat";
+    if thread_id {
+        for t in [root -->][?:Thread] {
+            if jid(t) == thread_id {
+                t.messages = messages;
+                t.updated_at = now;
+                t.title = ttl;
+                return {"id": jid(t)};
+            }
+        }
+    }
+    nt = Thread(title=ttl, created_at=now, updated_at=now, messages=messages);
+    root ++> nt;
+    return {"id": jid(nt)};
+}
+
+def:priv thread_delete(thread_id: str) -> bool {
+    for t in [root -->][?:Thread] {
+        if jid(t) == thread_id {
+            del t;
+            return True;
+        }
+    }
+    return False;
+}
+
+# ---- pinned tiles + saved views: per-user graph (was browser localStorage) --
+# A Pin stores a RECIPE ({id, kind, ref, title, chart, good_up} — a metric key or
+# generated SQL), re-run live by run_pinned; a SavedView stores a {page, env, date
+# range} bookmark. Both hang off the user's root (def:priv) so they persist per
+# account across browsers, exactly like Thread.
+node Pin {
+    has data: dict = {};
+}
+node SavedView {
+    has data: dict = {};
+}
+
+def:priv pin_list() -> list {
+    out: list[dict] = [];
+    for p in [root -->][?:Pin] {
+        out = out + [p.data];
+    }
+    return out;
+}
+
+# Add a recipe (deduped by kind+ref). Returns the full list.
+def:priv pin_add(recipe: dict) -> list {
+    kind = str(recipe["kind"]);
+    ref = str(recipe["ref"]);
+    for p in [root -->][?:Pin] {
+        d = p.data;
+        if (str(d["kind"]) == kind) and (str(d["ref"]) == ref) {
+            return pin_list();
+        }
+    }
+    gu = True;
+    if "good_up" in recipe {
+        gu = recipe["good_up"] as bool;
+    }
+    item = {"id": kind + "::" + ref, "kind": kind, "ref": ref,
+            "title": str(recipe["title"]), "chart": str(recipe["chart"]), "good_up": gu};
+    root ++> Pin(data=item);
+    return pin_list();
+}
+
+def:priv pin_remove(pin_id: str) -> list {
+    victims: list = [];
+    for p in [root -->][?:Pin] {
+        if str((p.data)["id"]) == pin_id {
+            victims = victims + [p];
+        }
+    }
+    for v in victims {
+        del v;
+    }
+    return pin_list();
+}
+
+def:priv view_list() -> list {
+    out: list[dict] = [];
+    for v in [root -->][?:SavedView] {
+        d = v.data;
+        out = out + [{"id": jid(v), "name": str(d["name"]), "page": str(d["page"]),
+                      "env": str(d["env"]), "from": str(d["from"]), "to": str(d["to"])}];
+    }
+    return out;
+}
+
+def:priv view_add(view: dict) -> list {
+    item = {"name": str(view["name"]), "page": str(view["page"]), "env": str(view["env"]),
+            "from": str(view["from"]), "to": str(view["to"])};
+    root ++> SavedView(data=item);
+    return view_list();
+}
+
+def:priv view_remove(view_id: str) -> list {
+    victims: list = [];
+    for v in [root -->][?:SavedView] {
+        if jid(v) == view_id {
+            victims = victims + [v];
+        }
+    }
+    for vv in victims {
+        del vv;
+    }
+    return view_list();
+}
+
 async def:priv ai_build(question: str, env: str, date_from: str, date_to: str) -> dict {
     if not ANTH_KEY {
         return {"answerable": False, "reply": "", "title": "", "tiles": [], "clarify": "AI planner unavailable — ANTHROPIC_API_KEY is not set on the server."};
@@ -1067,7 +1333,10 @@ async def:priv ai_build(question: str, env: str, date_from: str, date_to: str) -
             pk = pk + [{"key": ks, "title": m.title, "window": wlabel}];
             i = i + 1;
         }
+        hl = _result_headline(tiles);
+        chg = _save_search(q, hl["value"], str(hl["kind"]));
         return {"answerable": True, "reply": str(plan.reply), "title": str(plan.title), "tiles": tiles, "clarify": "",
+            "changed": chg,
             "plan": {"mode": "metrics", "reasoning": str(plan.reasoning), "metrics": pk, "sql": ""}};
     }
 
@@ -1086,9 +1355,12 @@ async def:priv ai_build(question: str, env: str, date_from: str, date_to: str) -
         chart = str(plan.chart) if plan.chart else "table";
         data = _shape_ai_tile(res, chart, date_from, date_to, env, q, plan.good_up);
         ttl = str(plan.title) if plan.title else "Result";
+        qtiles = [{"key": "adhoc", "title": ttl, "chart": chart, "data": data,
+            "recipe": {"kind": "query", "ref": str(plan.sql), "title": ttl, "chart": chart, "good_up": plan.good_up}}];
+        hl = _result_headline(qtiles);
+        chg = _save_search(q, hl["value"], str(hl["kind"]));
         return {"answerable": True, "reply": str(plan.reply), "title": ttl, "clarify": "",
-            "tiles": [{"key": "adhoc", "title": ttl, "chart": chart, "data": data,
-                "recipe": {"kind": "query", "ref": str(plan.sql), "title": ttl, "chart": chart, "good_up": plan.good_up}}],
+            "tiles": qtiles, "changed": chg,
             "plan": {"mode": "query", "reasoning": str(plan.reasoning), "metrics": [], "sql": str(prep["sql"])}};
     }
 

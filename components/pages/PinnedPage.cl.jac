@@ -1,9 +1,9 @@
 # My Dashboard — the tiles the user pinned from the Ask page. Each pin is a RECIPE
 # (metric key or generated SQL), re-run live on load for the current env/range, so
-# the numbers are never a frozen snapshot. Pins live in localStorage (util.pins_*).
-sv import from ...metrics_sv { run_pinned }
+# the numbers are never a frozen snapshot. Pins live in the user's server graph
+# (metrics_sv pin_* endpoints), so they follow the account across browsers.
+sv import from ...metrics_sv { run_pinned, pin_list, pin_remove }
 import from ..dash.DynamicTile { DynamicTile }
-import from ..dash.util { pins_get, pins_remove }
 import from ..ui.card { Card, CardHeader, CardTitle, CardDescription, CardContent }
 import from ..ui.button { Button }
 import from ..ui.skeleton { Skeleton }
@@ -31,8 +31,8 @@ def:pub PinnedPage(env: str, date_from: str, date_to: str, refresh_n: int) -> Js
     has loading: bool = True;
 
     async def load() {
-        ps = pins_get();
-        pins = ps as list[dict];
+        ps = (await pin_list()) as list[dict];
+        pins = ps;
         if len(ps) == 0 {
             tiles = [];
             loading = False;
@@ -47,10 +47,18 @@ def:pub PinnedPage(env: str, date_from: str, date_to: str, refresh_n: int) -> Js
         await load();
     }
 
-    # Unpin by index: drop from localStorage + both parallel lists (no server round-trip).
+    # Remove the pin from the server graph (fire-and-forget); UI updates optimistically.
+    async def do_remove(pin_id: str) -> None {
+        try {
+            await pin_remove(pin_id);
+        } except Exception as e {
+            return;
+        }
+    }
+    # Unpin by index: drop from the server graph + both parallel lists optimistically.
     def unpin(idx: int) -> None {
         p = pins[idx] as dict;
-        pins_remove(str(p["id"]));
+        do_remove(str(p["id"]));
         np = [];
         nt = [];
         j = 0;

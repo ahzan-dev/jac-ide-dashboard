@@ -99,63 +99,9 @@ def:pub delta_badge(delta: any, good_when_up: bool) -> dict {
     return {"arrow": arrow, "cls": cls, "txt": sign + str(dd) + "% vs prev"};
 }
 
-# ---- pinned dashboard: persist tile "recipes" to localStorage ----------------
-# A pin stores {id, kind, ref, title, chart} — a RECIPE (metric key or generated
-# SQL), not a data snapshot, so the pinned dashboard re-runs it live. Mirrors the
-# SavedViews localStorage pattern (no Popover/portal — those freeze this build).
-glob _PINS_KEY: str = "jachammer_pins";
-
-def:pub pins_get() -> list {
-    try {
-        raw = localStorage.getItem(_PINS_KEY);
-        if raw {
-            return JSON.parse(raw) as list;
-        }
-    } except Exception as e {
-        return [];
-    }
-    return [];
-}
-def _pins_save(pins: list) {
-    try {
-        localStorage.setItem(_PINS_KEY, JSON.stringify(pins));
-    } except Exception as e {
-        return;
-    }
-}
-# Add a recipe (deduped by kind+ref). Returns the new list.
-def:pub pins_add(recipe: dict) -> list {
-    cur = pins_get();
-    for p in cur {
-        pp = p as dict;
-        if (str(pp["kind"]) == str(recipe["kind"])) and (str(pp["ref"]) == str(recipe["ref"])) {
-            return cur;
-        }
-    }
-    # Deterministic + unique: dedupe above guarantees (kind, ref) is unique, so this
-    # id can't collide even for two pins added in the same millisecond.
-    pid = str(recipe["kind"]) + "::" + str(recipe["ref"]);
-    gu = True;
-    if "good_up" in recipe {
-        gu = recipe["good_up"] as bool;
-    }
-    item = {"id": pid, "kind": str(recipe["kind"]), "ref": str(recipe["ref"]),
-            "title": str(recipe["title"]), "chart": str(recipe["chart"]), "good_up": gu};
-    nv = cur + [item];
-    _pins_save(nv);
-    return nv;
-}
-def:pub pins_remove(pid: str) -> list {
-    cur = pins_get();
-    nv = [];
-    for p in cur {
-        if str((p as dict)["id"]) != pid {
-            nv = nv + [p];
-        }
-    }
-    _pins_save(nv);
-    return nv;
-}
+# NOTE: pins + saved views now persist in the user's server graph (metrics_sv:
+# pin_*/view_* endpoints), not localStorage, so they follow the account across
+# browsers. See PinnedPage / AskPage / SavedViews.
 
 # ---- client-side page cache: instant page switches --------------------------
 # Each page's last batch result is kept alive across mount/unmount so switching
