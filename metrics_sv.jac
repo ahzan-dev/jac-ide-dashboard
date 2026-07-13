@@ -863,7 +863,7 @@ glob _SCHEMA_DOC: str = "TABLE events — one row per tracked product event.\n"
     + "SESSIONS: properties.$session_id groups events into one browser session (a rough session-length proxy); ide_session_ended.duration_active_ms is the real focused time per IDE session.\n"
     + "Person/event props for identity: properties.email, properties.display_name, properties.name, properties.plan (free/builder/pro). properties.method on auth_signup_succeeded is the LOGIN method (password/google/github) — NOT a marketing channel. properties.provider / properties.auth_provider do NOT exist.\n"
     + "ACQUISITION CHANNEL: first-touch UTM/referrer are captured. On CLIENT events they ride as super-properties (properties.utm_source/utm_medium/utm_campaign/utm_content/referrer/initial_referring_domain/landing_path); they are ALSO threaded explicitly onto the server-emitted auth_signup_succeeded, so channel attribution for SIGNUPS must read utm_* off auth_signup_succeeded (empty = direct/no campaign). Use these (NOT login method) for channel/campaign attribution.\n"
-    + "PRIVACY: prompt/message TEXT is never stored — there is no message-content column; never try to read it.\n"
+    + "PRIVACY: by default prompt/message TEXT is NOT stored on the core events. EXCEPTION: when transcript capture is enabled, the ai_turn_transcript event carries properties.prompt (user's message) + properties.response (AI's final reply) + message_id (joins to ai_message_completed) — the raw material for per-user satisfaction analysis. It stores ONLY prompt+reply, never the intermediate steps. Do not expect content on any other event.\n"
     + "person_id is the stable user id (email/display_name may be sparse). Use LIMIT for lists (server caps at 200).";
 
 obj QueryPlan {
