@@ -511,12 +511,6 @@ glob METRICS: dict[str, Metric] = {
         definition="Median focused (active-tab) time users spend in the IDE per session.",
         caveat="Empty until ide_session_ended ships to production.",
         sql="SELECT round(median(toFloat64OrNull(toString(properties.duration_active_ms)))/60000,1) FROM events WHERE event='ide_session_ended' {env_filter} " + _RANGE
-    ),
-    "cold_preview_reliability": Metric(
-        key="cold_preview_reliability", title="Preview reliability (cold only)", unit="%",
-        definition="Preview success rate counting only cold starts — strips out pre-warmed previews that load instantly and flatter the headline.",
-        caveat="Empty until cold_start ships on preview_ready.",
-        sql="SELECT round(100.0*countIf(event='preview_ready' AND toString(properties.cold_start)='true')/nullIf(countIf(event='preview_start_requested' AND toString(properties.was_prepared)='false'),0),1) FROM events WHERE event IN ('preview_ready','preview_start_requested') {env_filter} " + _RANGE
     )
 };
 
@@ -858,10 +852,10 @@ glob _SCHEMA_DOC: str = "TABLE events — one row per tracked product event.\n"
     + "TIME (HogQL, evaluated by ClickHouse — no date math needed): today = toDate(timestamp) = today() ; yesterday = toDate(timestamp) = yesterday() ; this week = timestamp >= toStartOfWeek(now()) ; this month = timestamp >= toStartOfMonth(now()) ; last N days = timestamp >= now() - INTERVAL N DAY ; a specific date = toDate(timestamp) = toDate('YYYY-MM-DD') ; weekday = toDayOfWeek(timestamp) (1=Mon..7=Sun — do NOT use formatDateTime('%A')) ; hour of day = toHour(timestamp) ; day bucket for trends = toDate(timestamp).\n"
     + "ALWAYS put the literal placeholder {env} in the main WHERE, e.g. WHERE {env} AND event='ai_message_sent'. The server replaces {env} with the production environment filter.\n"
     + "CORE events (name — key props):\n"
-    + "auth_signup_succeeded (method — password/google/github; signup_trigger — guest_locked_feature/free_signup_bonus/dashboard_prompt/direct; NO 'provider' property) · auth_succeeded (method, is_new_user) · ide_opened · ide_session_ended (duration_active_ms — FOCUSED time not wall-clock; files_touched; previews_run; ended_reason) · project_created (source, project_type, files_count — files_count only on folder_upload)\n"
+    + "auth_signup_succeeded (method — password/google/github; signup_trigger — guest_locked_feature/free_signup_bonus/dashboard_prompt/direct; NO 'provider' property) · auth_succeeded (method, is_new_user) · ide_opened · ide_session_ended (duration_active_ms — FOCUSED time not wall-clock; files_touched; previews_run; ended_reason) · project_created (source)\n"
     + "ai_message_sent (prompt_length, attached_files_count, task_category, model, conversation_id, turn_number) · ai_message_completed (duration_ms, files_changed, response_length, model, conversation_id, turn_number, message_id) · ai_message_failed (reason, at_phase, duration_ms, model, conversation_id, turn_number) · ai_message_reverted (conversation_id, turn_number) · ai_response_rated (rating up/down, message_id) · ai_issue_reported (category, message_id) · ai_response_edited (message_id, time_to_edit_ms, files_changed — a manual edit of AI-written code = the real acceptance signal)\n"
     + "AI THREADING: conversation_id + turn_number link a chat thread — first-try success = turn_number=1 with an ai_message_completed and no later turn in the same conversation_id. properties.model is the model that ACTUALLY ran (now on ai_message_completed, not only ai_generation_metered).\n"
-    + "preview_start_requested (was_prepared) · preview_ready (duration_ms, cold_start — true=cold; filter cold_start to de-inflate reliability) · preview_start_failed (reason)\n"
+    + "preview_start_requested (was_prepared) · preview_ready (duration_ms) · preview_start_failed (reason)\n"
     + "deploy_sandbox_clicked · deploy_sandbox_succeeded (status) · deploy_production_clicked · deploy_production_succeeded (status)\n"
     + "git_commit_succeeded · github_connect_succeeded · project_shared · export_downloaded\n"
     + "ai_generation_metered (cost_usd, model, project_id) · upgrade_checkout_clicked (plan — INTENT only) · upgrade_checkout_succeeded (plan, plan_from, amount_usd, interval, is_first_upgrade, stripe_customer_id — the COMPLETED upgrade; paid conversion = succeeded/clicked) · subscription_canceled (plan_from, mrr_delta, days_active) · subscription_downgraded (plan_from, plan_to, mrr_delta) · topup_checkout_clicked (pack)\n"
