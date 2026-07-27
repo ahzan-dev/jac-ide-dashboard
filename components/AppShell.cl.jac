@@ -35,13 +35,13 @@ glob NAV: list = [
     {"group": "Explore", "items": [
         {"label": "Users & Adoption", "page": "users", "dot": "🟢"},
         {"label": "AI Requests", "page": "requests", "dot": "🟢"},
-        {"label": "AI Quality", "page": "quality", "dot": "🔴"},
+        {"label": "AI Quality", "page": "quality", "dot": "🟢"},
         {"label": "Advanced Analytics", "page": "advanced", "dot": "🟢"},
-        {"label": "Feature Usage", "page": "features", "dot": "🟡"},
-        {"label": "Cost & Usage", "page": "cost", "dot": "🟡"},
-        {"label": "Developer Impact", "page": "impact", "dot": "🟡"},
-        {"label": "System Health", "page": "health", "dot": "🟡"},
-        {"label": "Feedback & Roadmap", "page": "feedback", "dot": "🔴"}
+        {"label": "Feature Usage", "page": "features", "dot": "🟢"},
+        {"label": "Cost & Usage", "page": "cost", "dot": "🟢"},
+        {"label": "Developer Impact", "page": "impact", "dot": "🟢"},
+        {"label": "System Health", "page": "health", "dot": "🟢"},
+        {"label": "Feedback & Roadmap", "page": "feedback", "dot": "🟢"}
     ]},
     {"group": "Detail", "items": [
         {"label": "Ask (AI builder)", "page": "ask", "dot": "✨"},
@@ -49,7 +49,7 @@ glob NAV: list = [
         {"label": "Reports", "page": "reports", "dot": "📄"}
     ]},
     {"group": "Settings", "items": [
-        {"label": "Settings & Data", "page": "settings", "dot": "🟡"}
+        {"label": "Settings & Data", "page": "settings", "dot": "🟢"}
     ]}
 ];
 

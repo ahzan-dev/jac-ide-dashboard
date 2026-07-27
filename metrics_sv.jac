@@ -312,7 +312,7 @@ glob METRICS: dict[str, Metric] = {
     "rating_ratio": Metric(
         key="rating_ratio", title="Helpful rate", unit="%",
         definition="Percentage of AI responses users rated as helpful, out of all responses they rated.",
-        caveat="This rating feature hasn't launched yet, so it reads empty until it does.",
+        caveat="Live, but low-volume so far — most users never click 👍/👎, so read as directional.",
         sql="SELECT round(100.0*countIf(toString(properties.rating)='up')/nullIf(count(),0),1) FROM events WHERE event='ai_response_rated' {env_filter} " + _RANGE
     ),
 
@@ -325,19 +325,19 @@ glob METRICS: dict[str, Metric] = {
     "total_spend": Metric(
         key="total_spend", title="Total AI cost", unit="$",
         definition="Total dollars spent on AI usage this period.",
-        caveat="Reads $0 until live cost-tracking is fully switched on — not that spend was actually zero.",
+        
         sql="SELECT round(sum(toFloat64OrNull(toString(properties.cost_usd))),2) FROM events WHERE event='ai_generation_metered' {env_filter} " + _RANGE
     ),
     "cost_per_request": Metric(
         key="cost_per_request", title="Cost per AI request", unit="$",
         definition="Average dollar cost of one AI request.",
-        caveat="Reads $0 until live cost-tracking is fully switched on.",
+        
         sql="SELECT round(avg(toFloat64OrNull(toString(properties.cost_usd))),4) FROM events WHERE event='ai_generation_metered' {env_filter} " + _RANGE
     ),
     "cost_per_user": Metric(
         key="cost_per_user", title="Cost per active user", unit="$",
         definition="Average dollar cost per user who generated AI usage.",
-        caveat="Reads $0 until live cost-tracking is fully switched on.",
+        
         sql="SELECT round(sum(toFloat64OrNull(toString(properties.cost_usd)))/nullIf(count(DISTINCT person_id),0),2) FROM events WHERE event='ai_generation_metered' {env_filter} " + _RANGE
     ),
 
@@ -374,7 +374,7 @@ glob METRICS: dict[str, Metric] = {
     "issue_categories": Metric(
         key="issue_categories", title="Issues reported by users", shape="rows",
         definition="Breakdown of problems users have reported about the AI, like 'inaccurate', 'incomplete', or 'too slow'.",
-        caveat="This feature hasn't launched yet, so it reads empty until users can report issues live.",
+        caveat="Live, but very few users use the in-app report button — see the Issues & friction log for the full picture.",
         sql="SELECT coalesce(nullIf(toString(properties.category),''),'unknown') category, count() n FROM events WHERE event='ai_issue_reported' {env_filter} " + _RANGE + " GROUP BY category ORDER BY n DESC LIMIT 8"
     ),
 
@@ -432,7 +432,7 @@ glob METRICS: dict[str, Metric] = {
     "deploy_success": Metric(
         key="deploy_success", title="Deploy success rate", unit="%",
         definition="Percentage of deploy attempts that actually succeeded.",
-        caveat="This tracking hasn't launched yet, so it shows 'not available' until it does.",
+        caveat="Counts deploy outcome events (succeeded vs failed); clicks that never produce an outcome are not in the denominator.",
         sql="SELECT round(100.0*countIf(event IN ('deploy_sandbox_succeeded','deploy_production_succeeded'))/nullIf(countIf(event IN ('deploy_sandbox_succeeded','deploy_production_succeeded','deploy_sandbox_failed','deploy_production_failed')),0),1) FROM events WHERE event LIKE 'deploy_%' {env_filter} " + _RANGE
     ),
 
@@ -456,7 +456,7 @@ glob METRICS: dict[str, Metric] = {
     "upgrade_conversion": Metric(
         key="upgrade_conversion", title="Upgrade conversion", unit="%",
         definition="Of users who clicked to upgrade, the share who actually completed the paid upgrade.",
-        caveat="Empty until upgrade_checkout_succeeded ships to production.",
+        
         sql="SELECT round(100.0*countIf(event='upgrade_checkout_succeeded')/nullIf(countIf(event='upgrade_checkout_clicked'),0),1) FROM events WHERE event IN ('upgrade_checkout_clicked','upgrade_checkout_succeeded') {env_filter} " + _RANGE
     ),
     "paid_upgrades": Metric(
@@ -474,43 +474,43 @@ glob METRICS: dict[str, Metric] = {
     "first_try_success": Metric(
         key="first_try_success", title="First-try success", unit="%",
         definition="Share of chat threads where the AI got it right on the first turn — turn 1 completed and no follow-up turn was needed.",
-        caveat="Empty until conversation_id + turn_number ship to production.",
+        
         sql="SELECT round(100.0*countIf(t1_done AND max_turn=1)/nullIf(count(),0),1) FROM (SELECT toString(properties.conversation_id) cid, max(toFloat64OrNull(toString(properties.turn_number))) max_turn, countIf(event='ai_message_completed' AND toFloat64OrNull(toString(properties.turn_number))=1)>0 t1_done FROM events WHERE event IN ('ai_message_sent','ai_message_completed') {env_filter} " + _RANGE + " GROUP BY cid HAVING cid != '')"
     ),
     "model_latency": Metric(
         key="model_latency", title="Response time by model", shape="rows", unit="s", good_when_up=False,
         definition="Typical AI response time, broken down by the model that actually ran each request.",
-        caveat="Empty until model ships on ai_message_completed.",
+        
         sql="SELECT toString(properties.model) model, round(median(toFloat64OrNull(toString(properties.duration_ms)))/1000,1) v FROM events WHERE event='ai_message_completed' AND coalesce(toString(properties.model),'')!='' {env_filter} " + _RANGE + " GROUP BY model ORDER BY v DESC LIMIT 20"
     ),
     "model_usage": Metric(
         key="model_usage", title="AI requests by model", shape="rows", unit="",
         definition="How many AI requests actually ran on each model — the true usage breakdown (distinct from model_mix, which counts manual switches).",
-        caveat="Empty until model ships on ai_message_completed.",
+        
         sql="SELECT coalesce(nullIf(toString(properties.model),''),'unknown') model, count() n FROM events WHERE event='ai_message_completed' AND coalesce(toString(properties.model),'')!='' {env_filter} " + _RANGE + " GROUP BY model ORDER BY n DESC LIMIT 8"
     ),
     "acquisition_channel": Metric(
         key="acquisition_channel", title="Signups by channel", shape="rows", unit="",
         definition="Where new signups came from, by first-touch UTM source (no source shows as 'direct').",
-        caveat="Empty until first-touch UTM capture ships to production.",
+        caveat="First-touch attribution; empty source = direct/no campaign.",
         sql="SELECT if(coalesce(toString(properties.utm_source),'')='','direct',toString(properties.utm_source)) src, count() n FROM events WHERE event='auth_signup_succeeded' {env_filter} " + _RANGE + " GROUP BY src ORDER BY n DESC LIMIT 20"
     ),
     "signup_trigger_breakdown": Metric(
         key="signup_trigger_breakdown", title="Signups by trigger", shape="rows", unit="",
         definition="Which in-app gate or CTA drove each signup (guest locked feature, dashboard prompt, free-credit bonus, or direct).",
-        caveat="Empty until signup_trigger ships to production.",
+        
         sql="SELECT coalesce(nullIf(toString(properties.signup_trigger),''),'direct') trigger, count() n FROM events WHERE event='auth_signup_succeeded' {env_filter} " + _RANGE + " GROUP BY trigger ORDER BY n DESC LIMIT 10"
     ),
     "ai_edits": Metric(
         key="ai_edits", title="AI outputs manually edited", unit="", good_when_up=False,
         definition="How many times users manually edited a file the AI had just written — the real 'did they accept it' signal.",
-        caveat="Empty until ai_response_edited ships to production.",
+        caveat="A manual edit of AI-written code — the honest acceptance signal.",
         sql="SELECT count() FROM events WHERE event='ai_response_edited' {env_filter} " + _RANGE
     ),
     "session_depth": Metric(
         key="session_depth", title="Typical session length", unit="min",
         definition="Median focused (active-tab) time users spend in the IDE per session.",
-        caveat="Empty until ide_session_ended ships to production.",
+        caveat="Focused (active-tab) time, not wall-clock.",
         sql="SELECT round(median(toFloat64OrNull(toString(properties.duration_active_ms)))/60000,1) FROM events WHERE event='ide_session_ended' {env_filter} " + _RANGE
     ),
 

@@ -1,10 +1,10 @@
 sv import from ...metrics_sv { metrics_batch }
 sv import from ...billing_sv { billing_summary }
 import from ..dash.StatTile { StatTile }
-import from ..dash.ChartTiles { AreaTile, BarsTile, StaticStat, Banner }
+import from ..dash.ChartTiles { TableTile, AreaTile, BarsTile, StaticStat, Banner }
 import from ..dash.util { cache_key, cache_get, cache_put, cacheable }
 
-glob COST_KEYS: list = ["metered_rows", "total_spend", "cost_per_request", "cost_per_user", "model_mix", "ai_requests_weekly"];
+glob COST_KEYS: list = ["metered_rows", "total_spend", "cost_per_request", "cost_per_user", "model_mix", "ai_requests_weekly", "cost_by_model", "byok_split", "user_model_cost_matrix"];
 
 def:pub CostPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxElement {
     has data: dict = {};
@@ -65,7 +65,7 @@ def:pub CostPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxE
     }
 
     return <div className="grid grid-cols-12 gap-4">
-        <div className="col-span-12"><Banner text={"Revenue numbers are live and accurate. Cost numbers aren't reliable for the live product yet — cost-tracking has started collecting data but isn't correctly labeled as live traffic, so the spend tiles below show 'not available' for now (cost-tracked runs so far: " + metered_txt + "). This is a known fix in progress — once resolved, total AI cost, cost-per-request, and a real profit margin appear automatically."} /></div>
+        <div className="col-span-12"><Banner text={"Cost-tracking is LIVE: every AI run is metered server-side with real litellm dollars (cost-tracked runs in range: " + metered_txt + "). Spend tiles, per-model cost, BYOK split, and the per-user cost matrix below are actual platform spend, env-filtered to the selection."} /></div>
 
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Total AI cost" data={data["total_spend"]} loading={loading} /></div>
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Cost per AI request" data={data["cost_per_request"]} loading={loading} /></div>
@@ -78,6 +78,9 @@ def:pub CostPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxE
 
         {#* Burn spec §4 — the cost of the bet. Revenue side is external (Stripe). *#}
         <div className="col-span-12 lg:col-span-4"><StaticStat title="Cash runway" value="—" note="Not available yet — needs AI cost data plus your cash balance and subscription revenue to calculate how many months of cash you have left." definition="How many months your cash would last at the current pace of spending minus revenue." /></div>
-        <div className="col-span-12 lg:col-span-4"><StaticStat title="Cost of heaviest users" value="—" note="Not available yet — turns on once detailed AI cost-tracking is switched on for the live product." definition="Total AI cost run up by the highest-spending 10% of users." /></div>
+        <div className="col-span-12 lg:col-span-8"><TableTile title="Cost per user × model (heaviest first)" data={data["user_model_cost_matrix"]} loading={loading} /></div>
+
+        <div className="col-span-12 lg:col-span-7"><TableTile title="Cost by model" data={data["cost_by_model"]} loading={loading} /></div>
+        <div className="col-span-12 lg:col-span-5"><TableTile title="BYOK vs platform keys" data={data["byok_split"]} loading={loading} /></div>
     </div>;
 }
