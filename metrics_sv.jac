@@ -15,8 +15,10 @@ Shapes: scalar (value + optional spark series) · series (line/bar) · rows (hba
 import os;
 import re;
 import json;
+import time;
 import secrets;
 import asyncio;
+import threading;
 import traceback;
 import requests;
 import redis;
@@ -27,7 +29,17 @@ glob PH_KEY: str = os.environ.get("POSTHOG_API_KEY", "");
 glob PH_HOST: str = os.environ.get("POSTHOG_HOST", "https://us.posthog.com");
 glob PH_PROJECT: str = os.environ.get("POSTHOG_PROJECT_ID", "425465");
 glob REDIS_URL: str = os.environ.get("REDIS_URL", "redis://localhost:6379");
-glob CACHE_TTL: int = 600;
+glob CACHE_TTL: int = 600;          # freshness window
+glob STALE_TTL: int = 86400;        # stale copies kept 24h — the always-loads fallback
+
+# ---- PostHog API protection (rate limits + burst 504s are real) -------------
+# One page load fans out ~20 HogQL calls; unmanaged concurrency 504s ClickHouse
+# and unmanaged volume risks the documented per-minute/hour API limits.
+glob PH_MAX_CONCURRENCY: int = int(os.environ.get("PH_MAX_CONCURRENCY", "5"));
+glob PH_QPM: int = int(os.environ.get("PH_QPM", "60"));
+glob _PH_GATE: any = threading.BoundedSemaphore(PH_MAX_CONCURRENCY);
+glob _Q_LOCK: any = threading.Lock();
+glob _Q_TIMES: list = [];           # sliding 60s window of query timestamps
 
 # byLLM narrative (AI insights tile). Server-only key; degrades honestly if unset.
 glob ANTH_KEY: str = os.environ.get("ANTHROPIC_API_KEY", "");
@@ -54,16 +66,14 @@ def _make_redis() -> any {
 
 glob RDS: any = _make_redis();
 
-def _cache_get(k: str) -> dict | None {
+def _cache_read(k: str) -> dict | None {
     if RDS is None {
         return None;
     }
     try {
         raw = RDS.get(k);
         if raw {
-            d = json.loads(str(raw)) as dict;
-            d["meta"]["cached"] = True;
-            return d;
+            return json.loads(str(raw)) as dict;
         }
     } except Exception {
         return None;
@@ -71,12 +81,45 @@ def _cache_get(k: str) -> dict | None {
     return None;
 }
 
+# Fresh hit only (within CACHE_TTL) — the normal fast path.
+def _cache_get(k: str) -> dict | None {
+    d = _cache_read(k);
+    if d is None {
+        return None;
+    }
+    fu = d.get("_fresh_until", 0.0);
+    if time.time() > (fu as float) {
+        return None;
+    }
+    d["meta"]["cached"] = True;
+    return d;
+}
+
+# Any hit, however old (up to STALE_TTL) — the graphs-always-load fallback when
+# PostHog is rate-limited or erroring. Labeled honestly via meta.
+def _cache_get_stale(k: str) -> dict | None {
+    d = _cache_read(k);
+    if d is None {
+        return None;
+    }
+    age_min = int((time.time() - ((d.get("_fresh_until", 0.0) as float) - CACHE_TTL)) / 60.0);
+    meta = d.get("meta", {}) as dict;
+    meta["cached"] = "stale";
+    meta["caveat"] = ("STALE data (~" + str(age_min) + " min old) — PostHog was unavailable or "
+        + "rate-limited; refresh to retry. " + str(meta.get("caveat", "")));
+    d["meta"] = meta;
+    return d;
+}
+
+# Stored with the LONG physical TTL; freshness is the embedded timestamp, so an
+# expired-but-present entry can still serve as the stale fallback.
 def _cache_put(k: str, val: dict) -> None {
+    val["_fresh_until"] = time.time() + CACHE_TTL;
     if RDS is None {
         return;
     }
     try {
-        RDS.setex(k, CACHE_TTL, json.dumps(val));
+        RDS.setex(k, STALE_TTL, json.dumps(val));
     } except Exception {
         return;
     }
@@ -86,29 +129,105 @@ def _cache_put(k: str, val: dict) -> None {
 # Query runner (HogQL string OR native query kind)
 # ---------------------------------------------------------------------------
 
+# Sliding-window per-minute budget. Blocks briefly when the window is full
+# (smooths a burst into the next seconds); gives up after ~8s so a saturated
+# window degrades to the stale-cache path instead of hanging the request.
+def _acquire_budget() -> bool {
+    waited = 0.0;
+    while True {
+        _Q_LOCK.acquire();
+        now = time.time();
+        keep: list = [];
+        for t in _Q_TIMES {
+            if (now - (t as float)) < 60.0 {
+                keep = keep + [t];
+            }
+        }
+        _Q_TIMES.clear();
+        for t in keep {
+            _Q_TIMES.append(t);
+        }
+        ok = len(_Q_TIMES) < PH_QPM;
+        if ok {
+            _Q_TIMES.append(now);
+        }
+        _Q_LOCK.release();
+        if ok {
+            return True;
+        }
+        if waited >= 8.0 {
+            return False;
+        }
+        time.sleep(0.4);
+        waited = waited + 0.4;
+    }
+}
+
+# All PostHog traffic goes through here: budget -> concurrency gate -> up to 3
+# attempts with backoff on 429/5xx (honoring Retry-After when present).
 def run_query(query_obj: dict) -> dict {
     if not PH_KEY {
         return {"error": "POSTHOG_API_KEY not set (server env)"};
     }
-    url = f"{PH_HOST}/api/projects/{PH_PROJECT}/query/";
-    try {
-        resp = requests.post(
-            url,
-            headers={"Authorization": f"Bearer {PH_KEY}", "Content-Type": "application/json"},
-            data=json.dumps({"query": query_obj}),
-            timeout=20
-        );
-        if resp.status_code != 200 {
-            return {"error": f"posthog http {resp.status_code}: {str(resp.text)[:160]}"};
-        }
-        d = resp.json();
-        if d.get("error") {
-            return {"error": str(d.get("error"))};
-        }
-        return {"columns": d.get("columns", []), "results": d.get("results", [])};
-    } except Exception as e {
-        return {"error": str(e)};
+    if not _acquire_budget() {
+        return {"error": "posthog query budget exhausted (>" + str(PH_QPM) + "/min) — stale cache shown where available"};
     }
+    url = f"{PH_HOST}/api/projects/{PH_PROJECT}/query/";
+    attempt = 0;
+    last_err = "";
+    while attempt < 3 {
+        _PH_GATE.acquire();
+        status = 0;
+        body = "";
+        try {
+            resp = requests.post(
+                url,
+                headers={"Authorization": f"Bearer {PH_KEY}", "Content-Type": "application/json"},
+                data=json.dumps({"query": query_obj}),
+                timeout=20
+            );
+            status = resp.status_code;
+            if status == 200 {
+                d = resp.json();
+                _PH_GATE.release();
+                if d.get("error") {
+                    return {"error": str(d.get("error"))};
+                }
+                return {"columns": d.get("columns", []), "results": d.get("results", [])};
+            }
+            body = str(resp.text)[:160];
+            retry_after = 0.0;
+            try {
+                retry_after = float(resp.headers.get("Retry-After", "0"));
+            } except Exception {
+                retry_after = 0.0;
+            }
+        } except Exception as e {
+            _PH_GATE.release();
+            last_err = str(e);
+            attempt = attempt + 1;
+            if attempt < 3 {
+                time.sleep(1.0 * attempt);
+            }
+            continue;
+        }
+        _PH_GATE.release();
+        last_err = f"posthog http {status}: {body}";
+        # retry only what can heal: rate-limit + server-side blips
+        if (status == 429) or (status >= 500) {
+            attempt = attempt + 1;
+            if attempt < 3 {
+                backoff = retry_after if retry_after > 0.0 else (1.5 * attempt);
+                if backoff > 6.0 {
+                    backoff = 6.0;
+                }
+                time.sleep(backoff);
+            }
+            continue;
+        }
+        return {"error": last_err};
+    }
+    return {"error": last_err};
 }
 
 def run_hogql(sql: str) -> dict {
@@ -804,7 +923,16 @@ async def:priv metric(key: str, env: str, date_from: str, date_to: str, refresh:
 
     out: dict = {"value": None, "series": [], "columns": [], "rows": [], "prev": None, "delta": None, "meta": meta};
 
-    return await _run_metric(m, out, env, range_days, date_from, date_to, bkt, ck);
+    res = await _run_metric(m, out, env, range_days, date_from, date_to, bkt, ck);
+    # Graphs must always load: on any PostHog failure, fall back to the last
+    # known result (up to 24h old) with an honest STALE label.
+    if res.get("error") {
+        stale = _cache_get_stale(ck);
+        if stale is not None {
+            return stale;
+        }
+    }
+    return res;
 }
 
 # Live "N events in scope" for the sticky filter bar — makes the active

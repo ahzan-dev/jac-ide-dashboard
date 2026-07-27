@@ -30,7 +30,7 @@ import from .pages.CostPage { CostPage }
 import from .pages.SettingsPage { SettingsPage }
 import from .dash.DateRangePicker { DateRangePicker }
 import from .dash.SavedViews { SavedViews }
-import from .dash.util { iso_days_ago, iso_tomorrow, fmt_num }
+import from .dash.util { iso_days_ago, iso_tomorrow, fmt_num, inflight_start, inflight_end }
 
 # Three-layer IA (redesign plan P2): Summary (5-second page) → Explore
 # (diagnostic breakdowns) → Detail (row-level / build-your-own) → Settings.
@@ -114,6 +114,10 @@ def:pub AppShell(on_logout: Callable[[], None]) -> JsxElement {
     # P3: the env+range slice is the most important context on screen — keep a
     # live count of events in scope so the user always knows what they're seeing.
     async can with (env, date_from, date_to, refresh_n) entry {
+        sk = "scope:" + env + ":" + date_from + ":" + date_to + ":" + str(refresh_n);
+        if not inflight_start(sk) {
+            return;
+        }
         try {
             windows = (await window_list()) as list[dict];
         } except Exception as e {
@@ -125,6 +129,7 @@ def:pub AppShell(on_logout: Callable[[], None]) -> JsxElement {
         } except Exception as e2 {
             scope_n = None;
         }
+        inflight_end(sk);
     }
 
     def go(pg: str) {

@@ -1,5 +1,5 @@
 sv import from ...metrics_sv { metrics_batch }
-import from ..dash.util { cache_key, cache_get, cache_put, cacheable }
+import from ..dash.util { cache_key, cache_get, cache_put, cacheable, inflight_start, inflight_end }
 import from ..dash.StatTile { StatTile }
 import from ..dash.ChartTiles { LineTile, BarsTile, Banner }
 
@@ -24,7 +24,11 @@ def:pub QualityPage(env: str, date_from: str, date_to: str, refresh_n: int) -> J
         }
         loading = True;
         keys = QUALITY_KEYS;
+        if (not inflight_start(k)) and (not refresh) {
+            return;
+        }
         res = await metrics_batch(keys, env, date_from, date_to, refresh);
+        inflight_end(k);
         data = res as dict;
         if cacheable(data, keys) { cache_put(k, data); }
         loading = False;

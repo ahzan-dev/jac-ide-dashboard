@@ -152,6 +152,23 @@ def:pub delta_badge(delta: any, good_when_up: bool) -> dict {
 # reactive — each page's own `data`/`loading` has-vars still drive its render.
 glob PAGE_CACHE: dict = {};
 
+# In-flight dedup: the initial-load effect fires ~3× per mount (known jac2js
+# behavior) — without this, every page load sends the full metrics_batch three
+# times. First caller owns the fetch; duplicates return and let the owner's
+# completion set state.
+glob INFLIGHT: dict = {};
+
+def:pub inflight_start(k: str) -> bool {
+    if INFLIGHT.get(k, False) as bool {
+        return False;
+    }
+    INFLIGHT[k] = True;
+    return True;
+}
+def:pub inflight_end(k: str) {
+    INFLIGHT[k] = False;
+}
+
 def:pub cache_key(page: str, env: str, date_from: str, date_to: str) -> str {
     return page + ":" + env + ":" + date_from + ":" + date_to;
 }
