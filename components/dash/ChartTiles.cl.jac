@@ -9,7 +9,7 @@ import from "recharts" {
     LineChart, Line, BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid,
     PieChart, Pie, Cell
 }
-import from .util { fmt_num, pct1, short_date, axis_tick, delta_badge }
+import from .util { fmt_num, pct1, short_date, axis_tick, delta_badge, human_window }
 import from .DataTable { DataTable }
 
 # dataviz validated categorical palette (fixed order, never cycled)
@@ -22,7 +22,8 @@ def _def(data: any) -> str {
 }
 def _win(data: any) -> str {
     m = data["meta"] if data else None;
-    return str(m["window"]) if m else "";
+    # server labels are UTC datetimes — humanize into the display timezone
+    return human_window(str(m["window"])) if m else "";
 }
 def _cav(data: any) -> str {
     m = data["meta"] if data else None;

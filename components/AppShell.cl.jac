@@ -30,7 +30,7 @@ import from .pages.CostPage { CostPage }
 import from .pages.SettingsPage { SettingsPage }
 import from .dash.DateRangePicker { DateRangePicker }
 import from .dash.SavedViews { SavedViews }
-import from .dash.util { iso_days_ago, iso_tomorrow, fmt_num, inflight_start, inflight_end }
+import from .dash.util { iso_days_ago, iso_tomorrow, fmt_num, inflight_start, inflight_end, tz_display, tz_set, tz_name }
 
 # Three-layer IA (redesign plan P2): Summary (5-second page) → Explore
 # (diagnostic breakdowns) → Detail (row-level / build-your-own) → Settings.
@@ -179,6 +179,11 @@ def:pub AppShell(on_logout: Callable[[], None]) -> JsxElement {
     def on_refresh(e: MouseEvent) {
         refresh_n = refresh_n + 1;
     }
+    # Display-timezone switch (affects every label/axis; pickers stay device-local).
+    def on_tz(v: str) {
+        tz_set("" if v == "auto" else v);
+        window.location.reload();
+    }
     def handle_logout(e: MouseEvent) {
         on_logout();
     }
@@ -188,6 +193,8 @@ def:pub AppShell(on_logout: Callable[[], None]) -> JsxElement {
     if scope_n is not None {
         scope_txt = fmt_num(scope_n) + " events in scope";
     }
+    tz_value = tz_display() if tz_display() != "" else "auto";
+    tz_label = tz_name();
     win_opts: list[dict] = [];
     for w in windows {
         wd = w as dict;
@@ -275,7 +282,23 @@ def:pub AppShell(on_logout: Callable[[], None]) -> JsxElement {
 
                 <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/30 px-6 py-2 text-[11px] text-muted-foreground">
                     <span className="font-medium text-foreground">{scope_txt}</span>
-                    <span>· env = {env} · range follows the picker (auto buckets) · cohorts keep their own windows · prod = $host allowlist.</span>
+                    <span>· env = {env} · all times shown in</span>
+                    <Select value={tz_value} onValueChange={on_tz}>
+                        <SelectTrigger className="h-6 w-fit gap-1 border-none bg-transparent px-1 text-[11px] font-medium text-foreground shadow-none">🕒 {tz_label}</SelectTrigger>
+                        <SelectContent>
+                            <SelectGroup>
+                                <SelectItem value="auto">Device timezone</SelectItem>
+                                <SelectItem value="Asia/Colombo">Asia/Colombo</SelectItem>
+                                <SelectItem value="UTC">UTC</SelectItem>
+                                <SelectItem value="Asia/Kolkata">Asia/Kolkata</SelectItem>
+                                <SelectItem value="America/Los_Angeles">America/Los_Angeles</SelectItem>
+                                <SelectItem value="America/New_York">America/New_York</SelectItem>
+                                <SelectItem value="Europe/London">Europe/London</SelectItem>
+                                <SelectItem value="Asia/Singapore">Asia/Singapore</SelectItem>
+                            </SelectGroup>
+                        </SelectContent>
+                    </Select>
+                    <span>· range follows the picker · cohorts keep their own windows.</span>
                 </div>
                 </div>
 

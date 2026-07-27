@@ -6,8 +6,7 @@ import from ..dash.ChartTiles { LineTile, AreaTile, BarsTile, FunnelTile, Retent
 glob OVERVIEW_KEYS: list = [
     "active_builders", "ai_requests", "median_response", "code_produced",
     "active_weekly", "top_features", "problem_areas",
-    "gen_success", "kept_rate", "gen_success_weekly", "preview_reliability_weekly",
-    "funnel", "retention"
+    "gen_success", "kept_rate", "gen_success_weekly", "funnel"
 ];
 
 def:pub OverviewPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxElement {
@@ -53,9 +52,7 @@ def:pub OverviewPage(env: str, date_from: str, date_to: str, refresh_n: int) -> 
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><GaugeTile title="AI success rate" data={data["gen_success"]} loading={loading} /></div>
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><GaugeTile title="Work kept (not undone)" data={data["kept_rate"]} loading={loading} /></div>
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><LineTile title="AI success rate over time" data={data["gen_success_weekly"]} loading={loading} /></div>
-        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><LineTile title="Preview reliability over time" data={data["preview_reliability_weekly"]} loading={loading} /></div>
 
         <div className="col-span-12 lg:col-span-5"><FunnelTile title="New-user journey" data={data["funnel"]} loading={loading} /></div>
-        <div className="col-span-12 lg:col-span-7"><RetentionTile title="Retention over time" data={data["retention"]} loading={loading} /></div>
     </div>;
 }

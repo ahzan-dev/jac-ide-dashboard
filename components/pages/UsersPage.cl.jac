@@ -1,13 +1,13 @@
 sv import from ...metrics_sv { metrics_batch }
 import from ..dash.util { cache_key, cache_get, cache_put, cacheable, inflight_start, inflight_end }
 import from ..dash.StatTile { StatTile }
-import from ..dash.ChartTiles { AreaTile, DonutTile, FunnelTile, RetentionTile }
+import from ..dash.ChartTiles { AreaTile, DonutTile, FunnelTile, RetentionTile, BarsTile }
 
 glob USERS_KEYS: list = [
-    "signups_total", "active_builders", "new_signups", "activation",
+    "new_signups", "activation",
     "active_weekly", "returning_weekly", "signup_method",
     "funnel", "retention", "churn_risk"
-];
+, "acquisition_channel"];
 
 def:pub UsersPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxElement {
     has data: dict = {};
@@ -40,8 +40,6 @@ def:pub UsersPage(env: str, date_from: str, date_to: str, refresh_n: int) -> Jsx
     }
 
     return <div className="grid grid-cols-12 gap-4">
-        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Signups (last 6 months)" data={data["signups_total"]} loading={loading} /></div>
-        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Active builders" data={data["active_builders"]} loading={loading} /></div>
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="New signups" data={data["new_signups"]} loading={loading} /></div>
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="New users who got a result" data={data["activation"]} loading={loading} /></div>
 
@@ -52,5 +50,6 @@ def:pub UsersPage(env: str, date_from: str, date_to: str, refresh_n: int) -> Jsx
         <div className="col-span-12 lg:col-span-4"><FunnelTile title="New-user journey" data={data["funnel"]} loading={loading} /></div>
         <div className="col-span-12 lg:col-span-5"><RetentionTile title="Retention over time" data={data["retention"]} loading={loading} /></div>
         <div className="col-span-12 lg:col-span-3"><StatTile title="Accounts at risk (60 days)" data={data["churn_risk"]} loading={loading} /></div>
+        <div className="col-span-12 lg:col-span-6"><BarsTile title="Signups by channel" data={data["acquisition_channel"]} loading={loading} /></div>
     </div>;
 }
