@@ -26,8 +26,8 @@ def _row0(block: dict) -> dict {
 }
 
 # Small generic table (no search/sort — the parent DataTable has that; this is
-# the compact drill-down rendering).
-def MiniTable(block: dict) -> JsxElement {
+# the compact drill-down rendering). :pub — ProjectPeek reuses it.
+def:pub MiniTable(block: dict) -> JsxElement {
     cols = block.get("columns", []) as list;
     rows = block.get("rows", []) as list;
     heads: list = [];
