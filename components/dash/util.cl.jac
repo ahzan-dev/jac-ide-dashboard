@@ -13,6 +13,46 @@ def:pub iso_of(d: any) -> str {
     return d.toISOString()[0:10];
 }
 
+# ---- timezone bridge: users pick/see LOCAL time; storage + queries stay UTC --
+def _pad2(n: int) -> str {
+    s = str(n);
+    if len(s) < 2 {
+        return "0" + s;
+    }
+    return s;
+}
+
+# "YYYY-MM-DDTHH:MM" from a datetime-local input (LOCAL time) -> "YYYY-MM-DD HH:MM:SS" UTC.
+def:pub local_to_utc(s: str) -> str {
+    d = new(Date, s);
+    iso = d.toISOString();
+    return iso[0:10] + " " + iso[11:19];
+}
+
+# "YYYY-MM-DD HH:MM[:SS]" UTC (server form) -> "YYYY-MM-DD HH:MM" in the viewer's local tz.
+def:pub utc_to_local(s: str) -> str {
+    if len(s) < 16 {
+        return s;
+    }
+    d = new(Date, s[0:16].replace(" ", "T") + ":00Z");
+    return str(d.getFullYear()) + "-" + _pad2(d.getMonth() + 1) + "-" + _pad2(d.getDate())
+        + " " + _pad2(d.getHours()) + ":" + _pad2(d.getMinutes());
+}
+
+# Same, shaped for a datetime-local input's value attribute.
+def:pub utc_to_local_input(s: str) -> str {
+    return utc_to_local(s).replace(" ", "T");
+}
+
+# The viewer's IANA timezone name (e.g. "Asia/Colombo") for honest labeling.
+def:pub tz_name() -> str {
+    try {
+        return str(new(Intl.DateTimeFormat).resolvedOptions().timeZone);
+    } except Exception {
+        return "local";
+    }
+}
+
 # Axis tick: "2026-05-17" -> "05-17". Named (inline lambda tickFormatters miscompile in jac2js).
 def:pub short_date(v: any) -> str {
     s = str(v);

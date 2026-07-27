@@ -1,7 +1,7 @@
 # AI-first builder (v0, registry-only). One adaptive chat: a concrete question
 # builds tiles from verified metrics; a vague one gets a clarifying question back
 # ("discussion" emerges, no separate mode). Hybrid — the 11 static pages stay.
-sv import from ...metrics_sv { ai_build, search_history, suggest_next, thread_list, thread_get, thread_save, thread_delete, pin_add }
+sv import from ...metrics_sv { ai_build, search_history, suggest_next, thread_list, thread_get, thread_save, thread_delete, pin_add, report_from_thread }
 import from ..dash.DynamicTile { DynamicTile }
 import from ..dash.util { fmt_num }
 import from ..ui.card { Card, CardHeader, CardTitle, CardDescription, CardContent }
@@ -170,6 +170,8 @@ def:pub AskPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxEl
     has show_recent: bool = False;       # the recent-searches dropdown (mid-chat access)
     has thread_id: str = "";             # current conversation ("" = new/unsaved)
     has threads: list[dict] = [];        # thread list for the rail (newest first)
+    has compiling: bool = False;         # thread -> report in flight
+    has compiled_msg: str = "";          # result note after compiling
 
     # Refresh the history + suggestions (on mount and after every search).
     async def load_meta() -> None {
@@ -312,6 +314,27 @@ def:pub AskPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxEl
     def pin_tile(recipe: dict) -> None {
         do_pin(recipe);
     }
+    # R2: compile this thread into a snapshot report (questions/answers as text,
+    # tiles as live recipes) scoped to the current env + date range.
+    async def compile_report(e: MouseEvent) {
+        if (thread_id == "") or busy or compiling {
+            return;
+        }
+        compiling = True;
+        compiled_msg = "";
+        try {
+            res = (await report_from_thread(thread_id, "", env, date_from, date_to)) as dict;
+            err = str(res.get("error", ""));
+            if err != "" {
+                compiled_msg = "Couldn't compile: " + err;
+            } else {
+                compiled_msg = "Saved to Reports: \"" + str(res.get("title", "")) + "\" — open the Reports page to build & share it.";
+            }
+        } except Exception as e2 {
+            compiled_msg = "Couldn't compile this thread into a report.";
+        }
+        compiling = False;
+    }
     def submit() -> None {
         run_build(draft);
     }
@@ -323,6 +346,8 @@ def:pub AskPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxEl
             run_build(draft);
         }
     }
+
+    compile_btn_label = "Compiling…" if compiling else "📄 Compile into report";
 
     return <div className="mx-auto flex w-full max-w-5xl gap-4">
         <div className="flex w-48 shrink-0 flex-col gap-2 border-r border-border pr-3">
@@ -337,6 +362,14 @@ def:pub AskPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxEl
             </div>
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-4">
+        {if (len(messages) > 0) and (thread_id != "") {
+            <div className="flex flex-wrap items-center justify-end gap-2">
+                {if compiled_msg != "" {
+                    <span className="text-[11px] text-muted-foreground">{compiled_msg}</span>
+                }}
+                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={compile_report} disabled={compiling}>{compile_btn_label}</Button>
+            </div>
+        }}
         {if len(messages) == 0 {
             <Card className="w-full">
                 <CardHeader className="pb-3">

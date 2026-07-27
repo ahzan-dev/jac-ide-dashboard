@@ -188,3 +188,175 @@ test "QueryPlan defaults are safe (clarify-mode, good_up True, table chart)" {
     assert p.keys == [];
     assert p.sql == "";
 }
+
+# ---------------------------------------------------------------------------
+# R1: datetime windows — _parse_dt / _norm_dt / _bucket_span
+# ---------------------------------------------------------------------------
+test "parse_dt accepts date, datetime, and T-separator; rejects junk" {
+    assert _parse_dt("2026-07-26") is not None;
+    assert _parse_dt("2026-07-26 17:00") is not None;
+    assert _parse_dt("2026-07-26T17:00") is not None;
+    assert _parse_dt("2026-07-26 17:00:30") is not None;
+    assert _parse_dt("not-a-date") is None;
+    assert _parse_dt("2026-13-99") is None;
+}
+test "norm_dt canonicalizes to seconds precision for toDateTime()" {
+    d = _parse_dt("2026-07-26T17:00");
+    assert _norm_dt(d) == "2026-07-26 17:00:00";
+    d2 = _parse_dt("2026-07-26");
+    assert _norm_dt(d2) == "2026-07-26 00:00:00";
+}
+test "bucket_span picks sub-day buckets for short windows, keeps the old ladder" {
+    assert _bucket_span(7.5 * 3600) == "toStartOfFifteenMinutes";
+    assert _bucket_span(2 * 86400.0) == "toStartOfHour";
+    assert _bucket_span(30 * 86400.0) == "toDate";
+    assert _bucket_span(90 * 86400.0) == "toStartOfWeek";
+    assert _bucket_span(365 * 86400.0) == "toStartOfMonth";
+    # legacy day-based entry point unchanged for whole-day ranges
+    assert _bucket(30) == "toDate";
+    assert _bucket(200) == "toStartOfMonth";
+}
+
+# ---------------------------------------------------------------------------
+# R1: promoted drill-down metrics — registry contracts the report layer trusts
+# ---------------------------------------------------------------------------
+test "promoted drilldown metrics exist, are rows-shaped, and env-filtered" {
+    for k in ["user_rollup", "signups_detail", "cost_per_turn", "cost_by_model",
+              "project_cost_rollup", "byok_split", "upgrades_detail",
+              "deploy_outcomes", "issue_log", "project_sources"] {
+        m = METRICS[k];
+        assert m.shape == "rows", f"{k} not rows-shaped";
+        assert "{env_filter}" in m.sql, f"{k} missing env filter";
+        assert "{from}" in m.sql, f"{k} not window-driven";
+    }
+}
+test "drilldown tables route to the table tile, not hbars" {
+    assert _tile_for(METRICS["user_rollup"]) == "table";
+    assert _tile_for(METRICS["cost_per_turn"]) == "table";
+    assert _tile_for(METRICS["issue_log"]) == "table";
+}
+test "signups read the signup event, never logins (Max-AI lesson 1)" {
+    assert "auth_signup_succeeded" in METRICS["signups_detail"].sql;
+    assert "auth_succeeded'" not in METRICS["signups_detail"].sql.replace("auth_signup_succeeded", "");
+}
+test "project start method reads source, never template_id (Max-AI lesson 2)" {
+    assert "properties.source" in METRICS["project_sources"].sql;
+    assert "template_id" not in METRICS["project_sources"].sql;
+}
+
+# ---------------------------------------------------------------------------
+# R1: report templates — sections must reference real registry keys only
+# ---------------------------------------------------------------------------
+test "event-report template sections all resolve to registry keys" {
+    secs = _report_template("event-report");
+    assert len(secs) > 15;
+    for s in secs {
+        rec = s["recipe"] as dict;
+        if rec.get("kind") == "metric" {
+            assert str(rec["ref"]) in METRICS, f"template references unknown metric {rec['ref']}";
+        }
+    }
+}
+test "event-report template covers the hackathon report's core sections" {
+    secs = _report_template("event-report");
+    refs = [];
+    for s in secs {
+        rec = s["recipe"] as dict;
+        if rec.get("kind") {
+            refs = refs + [str(rec["ref"])];
+        }
+    }
+    for need in ["signups_detail", "user_rollup", "cost_by_model", "cost_per_turn",
+                 "byok_split", "deploy_outcomes", "upgrades_detail", "issue_log"] {
+        assert need in refs, f"template missing {need}";
+    }
+}
+test "unknown template falls back to a blank scaffold" {
+    secs = _report_template("blank");
+    assert len(secs) == 2;
+    assert secs[0]["type"] == "header";
+}
+
+# ---------------------------------------------------------------------------
+# R1: cost reconciliation check (Max-AI lesson 3 — no silent plug rows)
+# ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# R2: AI-section merge + user×model pivot (pure parts of report_generate)
+# ---------------------------------------------------------------------------
+test "merge_ai_sections inserts after leading header, strips old ai sections" {
+    base = [
+        {"id": "s01", "type": "header", "title": "H", "md": "", "recipe": {}},
+        {"id": "s03", "type": "tile", "title": "T", "md": "", "recipe": {"kind": "metric", "ref": "new_signups"}},
+        {"id": "ai1", "type": "text", "title": "old", "md": "stale", "recipe": {}, "ai": True}
+    ];
+    out = _merge_ai_sections(base, "SUM", ["f1", "f2"], ["c1"]);
+    assert str(out[0]["id"]) == "s01";
+    assert str(out[1]["id"]) == "ai1" and str(out[1]["md"]) == "SUM";
+    assert str(out[2]["id"]) == "ai2" and "f1" in str(out[2]["md"]);
+    assert str(out[len(out) - 1]["id"]) == "ai3" and "c1" in str(out[len(out) - 1]["md"]);
+    # idempotent: regenerating never duplicates ai sections
+    out2 = _merge_ai_sections(out, "SUM2", [], []);
+    n_ai = 0;
+    for s in out2 {
+        if (s as dict).get("ai", False) as bool {
+            n_ai = n_ai + 1;
+        }
+    }
+    assert n_ai == 3;
+}
+test "pivot_user_model builds ranked user rows with per-model columns" {
+    cols = ["ts", "user", "model", "cost_usd", "key_type", "project_id"];
+    rows = [
+        ["t1", "a@x.com", "sonnet", 2.0, "platform", "p1"],
+        ["t2", "a@x.com", "opus", 6.0, "platform", "p1"],
+        ["t3", "b@x.com", "sonnet", 1.5, "platform", "p2"]
+    ];
+    r = _pivot_user_model(cols, rows);
+    assert r["columns"] == ["user", "runs", "total_usd", "opus", "sonnet"];
+    assert r["rows"][0][0] == "a@x.com" and r["rows"][0][2] == 8.0;
+    assert r["rows"][1][0] == "b@x.com" and r["rows"][1][4] == 1.5;
+    assert r["rows"][1][3] is None;
+}
+test "pivot rejects input without the expected columns" {
+    r = _pivot_user_model(["x"], [["y"]]);
+    assert "error" in r;
+}
+
+# ---------------------------------------------------------------------------
+# R3: PII masking + markdown export (pure parts of sharing)
+# ---------------------------------------------------------------------------
+test "mask_obj masks email local-parts everywhere, leaves other text alone" {
+    o = {"sections": [{"md": "Top spender justin-kang@berkeley.edu at $95.21"}],
+         "snapshot": {"a": {"data": {"rows": [["x@y.com", 5, "claude-sonnet-4-6"]]}}}};
+    m = _mask_obj(o) as dict;
+    md = str(((m["sections"] as list)[0] as dict)["md"]);
+    assert "j***@berkeley.edu" in md;
+    assert "justin-kang@" not in md;
+    row = ((((m["snapshot"] as dict)["a"] as dict)["data"] as dict)["rows"] as list)[0] as list;
+    assert row[0] == "x***@y.com";
+    assert row[1] == 5;
+    assert row[2] == "claude-sonnet-4-6";
+}
+test "md_table renders columns, rows, and None as empty" {
+    t = _md_table(["user", "n"], [["a@b.com", 3], ["c", None]]);
+    assert "| user | n |" in t;
+    assert "| a@b.com | 3 |" in t;
+    assert "| c |  |" in t;
+}
+
+test "report_checks flags a per-turn sum that misses the total" {
+    r = Report(sections=[
+        {"id": "a", "type": "tile", "title": "t", "md": "", "recipe": {"kind": "metric", "ref": "total_spend"}},
+        {"id": "b", "type": "table", "title": "u", "md": "", "recipe": {"kind": "metric", "ref": "cost_per_turn"}}
+    ]);
+    r.snapshot = {
+        "a": {"data": {"value": 351.76}},
+        "b": {"data": {"columns": ["ts", "user", "model", "cost_usd"], "rows": [["x", "u", "m", 300.0], ["y", "v", "m", 21.76]]}}
+    };
+    checks = _report_checks(r);
+    assert len(checks) == 1;
+    assert checks[0]["ok"] == False;
+    r.snapshot["b"] = {"data": {"columns": ["ts", "user", "model", "cost_usd"], "rows": [["x", "u", "m", 300.0], ["y", "v", "m", 51.76]]}};
+    checks2 = _report_checks(r);
+    assert checks2[0]["ok"] == True;
+}

@@ -210,9 +210,55 @@ delivery of the summary.
 **Effort feel:** R1 is the big one (registry surgery + two pages) — roughly a Phase-2-sized effort.
 R2 and R3 are each small (the byLLM and Pin/Gate patterns already exist to copy). R4 is optional polish.
 
+## 9b · Status (2026-07-27) — R1–R3 SHIPPED, R4 assessed & deferred
+
+All on branch `feat/report-studio-r1`, each phase browser-verified and committed separately:
+
+- **R1 ✅** — datetime windows (15-min/hour buckets), 11 promoted registry metrics, Report/NamedWindow
+  nodes, snapshot builds w/ cost-reconciliation check, ReportsPage. Acceptance passed: the 2026-07-26
+  hackathon report rebuilds in-app in ~7s and matches `reports/hackathon-2026-07-26/` exactly.
+- **R1.5 ✅** — `DataTable` (search / numeric-aware sort / pagination) under every table tile.
+- **R2 ✅** — `report_generate` (summary/findings/caveats over the frozen snapshot; full-table sums in
+  context so totals are never extrapolated from sampled rows), `report_from_thread` + Compile button on
+  Ask, `user_model_cost_matrix` composite (G3).
+- **R3 ✅** — `report_share`/`report_unshare` (frozen copy on `root.shared`, `grant(ReadPerm)`, emails
+  masked by default), `def:pub report_public` (§8 invariants verified: tokenless curl, zero raw emails,
+  wrong token 404s), `/report/<token>` public page outside the Gate, Markdown export (Blob download).
+- **R4 ⏸ deferred, with reasons:**
+  - *Scheduled reports*: APScheduler is not installed in this runtime ("dynamic scheduling disabled" at
+    boot) — needs the `scheduler` capability in jac.toml + `jac install`, then a cron walker calling
+    `_do_report_build`. Mechanical once the dependency decision is made.
+  - *Viewer-role accounts*: token links cover the current need; real viewer logins need a product
+    decision on provisioning (who mints accounts, jac-scale role vs app role) before code is worth writing.
+  - *Slack/email delivery*: no webhook/SMTP config exists in this deployment (`[scale.emailer]` unset).
+  - *Live-mode reports*: the Rebuild button already re-runs a report on demand; auto-live rendering adds
+    little until scheduled runs exist.
+
 ---
 
-## 10 · Non-goals
+## 10 · Lessons from the PostHog Max AI comparison (2026-07-27)
+
+Max AI answered the same hackathon question with correct *totals* but five material errors — every one
+a **context** failure, not a SQL failure. These become R1 acceptance fixtures and design rules:
+
+1. **Participants rule**: participants = `auth_signup_succeeded` ∪ `auth_succeeded` persons. Max used
+   logins only → "0 signups" in a 91-signup window (compounded by the `is_new_user` bug, TRACKING_GAPS
+   §D-17). The `signups_detail`/`user_rollup` metrics encode this so no consumer re-derives it.
+2. **Source-not-template rule**: project start method reads `project_created.source`; `template_id`
+   (`'empty'` on every prompt-started project) is a scaffold artifact. Max inverted 35-prompt/4-template
+   into ~10/~28.
+3. **Reconciliation invariant**: any per-entity cost table must sum to the window total to the cent —
+   Max's top-spender table lost ~$30 into a subtraction plug ("remaining users ≈ $X"). `report_build`
+   should assert Σ(per-user) == total and surface a mismatch as an error banner, never a plug row.
+4. **Env filter is non-optional**: unfiltered window = 41 projects / 21 sandbox-oks vs prod 40 / 20 —
+   Max's exact numbers. Small delta this time by luck; the registry injects `env_filter()` always.
+5. **Users-vs-events discipline**: 18 `github_connect_succeeded` events = **13** users; Max reported
+   "18 users (~24%)" and invented names. Every promoted metric carries both counts explicitly.
+6. **"Issues" is six event families** (`ai_message_failed`, quota blocks, preview/deploy/github/checkout
+   failures + aborts), not just `ai_issue_reported` (1 row). The `issue_log` metric is the single
+   honest source.
+
+## 11 · Non-goals
 
 - No WYSIWYG layout editor — sections are a vertical list, period.
 - No public *live* reports — public = snapshot, always (invariant §8.1).

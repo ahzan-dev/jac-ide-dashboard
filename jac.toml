@@ -65,3 +65,8 @@ lib_imports = ["import tailwindcss from '@tailwindcss/vite'"]
 # (Config flattened in jaclang: [plugins.scale.microservices] -> [scale.microservices].)
 [scale.microservices]
 enabled = false
+
+# 0.34 gates byLLM's optional deps (litellm/httpx/loguru/pillow) behind the 'llm'
+# capability; this section declares the intent so `jac install` syncs them.
+# Model selection stays in code (INSIGHT_LLM env, default claude-haiku-4-5).
+[byllm]
