@@ -210,6 +210,30 @@ delivery of the summary.
 **Effort feel:** R1 is the big one (registry surgery + two pages) — roughly a Phase-2-sized effort.
 R2 and R3 are each small (the byLLM and Pin/Gate patterns already exist to copy). R4 is optional polish.
 
+## 9b · Status (2026-07-27) — R1–R3 SHIPPED, R4 assessed & deferred
+
+All on branch `feat/report-studio-r1`, each phase browser-verified and committed separately:
+
+- **R1 ✅** — datetime windows (15-min/hour buckets), 11 promoted registry metrics, Report/NamedWindow
+  nodes, snapshot builds w/ cost-reconciliation check, ReportsPage. Acceptance passed: the 2026-07-26
+  hackathon report rebuilds in-app in ~7s and matches `reports/hackathon-2026-07-26/` exactly.
+- **R1.5 ✅** — `DataTable` (search / numeric-aware sort / pagination) under every table tile.
+- **R2 ✅** — `report_generate` (summary/findings/caveats over the frozen snapshot; full-table sums in
+  context so totals are never extrapolated from sampled rows), `report_from_thread` + Compile button on
+  Ask, `user_model_cost_matrix` composite (G3).
+- **R3 ✅** — `report_share`/`report_unshare` (frozen copy on `root.shared`, `grant(ReadPerm)`, emails
+  masked by default), `def:pub report_public` (§8 invariants verified: tokenless curl, zero raw emails,
+  wrong token 404s), `/report/<token>` public page outside the Gate, Markdown export (Blob download).
+- **R4 ⏸ deferred, with reasons:**
+  - *Scheduled reports*: APScheduler is not installed in this runtime ("dynamic scheduling disabled" at
+    boot) — needs the `scheduler` capability in jac.toml + `jac install`, then a cron walker calling
+    `_do_report_build`. Mechanical once the dependency decision is made.
+  - *Viewer-role accounts*: token links cover the current need; real viewer logins need a product
+    decision on provisioning (who mints accounts, jac-scale role vs app role) before code is worth writing.
+  - *Slack/email delivery*: no webhook/SMTP config exists in this deployment (`[scale.emailer]` unset).
+  - *Live-mode reports*: the Rebuild button already re-runs a report on demand; auto-live rendering adds
+    little until scheduled runs exist.
+
 ---
 
 ## 10 · Lessons from the PostHog Max AI comparison (2026-07-27)
