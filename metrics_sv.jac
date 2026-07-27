@@ -521,19 +521,19 @@ glob METRICS: dict[str, Metric] = {
         key="user_rollup", title="Per-user activity", shape="rows",
         definition="One row per active user: signups, projects, AI turns, failures, metered cost, previews, deploys, GitHub, upgrades — the who-did-what table.",
         caveat="'anon:' rows are devices that never signed in. Cost is platform-metered $ (BYOK runs bill the user's own key).",
-        sql="SELECT coalesce(nullIf(toString(any(person.properties.email)),''), concat('anon:', substring(toString(person_id),1,8))) user, countIf(event='auth_signup_succeeded') signed_up, countIf(event='project_created') projects, countIf(event='ai_message_sent') ai_turns, countIf(event='ai_message_failed') ai_failed, round(sumIf(toFloat64OrNull(toString(properties.cost_usd)), event='ai_generation_metered'),2) cost_usd, countIf(event='ai_generation_metered' AND toString(properties.byok)='true') byok_runs, countIf(event='preview_ready') previews, countIf(event='deploy_sandbox_succeeded') sbx_ok, countIf(event='deploy_sandbox_failed') sbx_fail, countIf(event='deploy_production_succeeded') prod_ok, countIf(event='github_connect_succeeded') gh_ok, countIf(event='upgrade_checkout_succeeded') upgraded FROM events WHERE event IN ('auth_signup_succeeded','project_created','ai_message_sent','ai_message_failed','ai_generation_metered','preview_ready','deploy_sandbox_succeeded','deploy_sandbox_failed','deploy_production_succeeded','github_connect_succeeded','upgrade_checkout_succeeded') {env_filter} " + _RANGE + " GROUP BY person_id ORDER BY ai_turns DESC, cost_usd DESC LIMIT 200"
+        sql="SELECT coalesce(nullIf(toString(any(person.properties.email)),''), nullIf(toString(any(person.properties.display_name)),''), nullIf(toString(any(person.properties.name)),''), concat('anon:', substring(toString(person_id),1,8))) user, countIf(event='auth_signup_succeeded') signed_up, countIf(event='project_created') projects, countIf(event='ai_message_sent') ai_turns, countIf(event='ai_message_failed') ai_failed, round(sumIf(toFloat64OrNull(toString(properties.cost_usd)), event='ai_generation_metered'),2) cost_usd, countIf(event='ai_generation_metered' AND toString(properties.byok)='true') byok_runs, countIf(event='preview_ready') previews, countIf(event='deploy_sandbox_succeeded') sbx_ok, countIf(event='deploy_sandbox_failed') sbx_fail, countIf(event='deploy_production_succeeded') prod_ok, countIf(event='github_connect_succeeded') gh_ok, countIf(event='upgrade_checkout_succeeded') upgraded FROM events WHERE event IN ('auth_signup_succeeded','project_created','ai_message_sent','ai_message_failed','ai_generation_metered','preview_ready','deploy_sandbox_succeeded','deploy_sandbox_failed','deploy_production_succeeded','github_connect_succeeded','upgrade_checkout_succeeded') {env_filter} " + _RANGE + " GROUP BY person_id ORDER BY ai_turns DESC, cost_usd DESC LIMIT 200"
     ),
     "signups_detail": Metric(
         key="signups_detail", title="Signups (row level)", shape="rows",
         definition="Every signup in the window: time, email, method, in-app trigger, and UTM source.",
         caveat="Signups fire server-side (auth_signup_succeeded) — do NOT count logins (auth_succeeded) as signups; its is_new_user flag is unreliable (TRACKING_GAPS D-17).",
-        sql="SELECT substring(toString(timestamp),1,16) ts, coalesce(nullIf(toString(person.properties.email),''), concat('anon:', substring(toString(person_id),1,8))) user, coalesce(toString(properties.method),'') method, coalesce(toString(properties.signup_trigger),'') trigger, coalesce(toString(properties.utm_source),'') utm_source FROM events WHERE event='auth_signup_succeeded' {env_filter} " + _RANGE + " ORDER BY timestamp LIMIT 300"
+        sql="SELECT substring(toString(timestamp),1,16) ts, coalesce(nullIf(toString(person.properties.email),''), nullIf(toString(person.properties.display_name),''), nullIf(toString(person.properties.name),''), concat('anon:', substring(toString(person_id),1,8))) user, coalesce(toString(properties.method),'') method, coalesce(toString(properties.signup_trigger),'') trigger, coalesce(toString(properties.utm_source),'') utm_source FROM events WHERE event='auth_signup_succeeded' {env_filter} " + _RANGE + " ORDER BY timestamp LIMIT 300"
     ),
     "cost_per_turn": Metric(
         key="cost_per_turn", title="AI cost per run", shape="rows",
         definition="Every metered AI generation run: time, user, model, dollar cost, key type (platform vs BYOK), and project.",
         caveat="Per-entity sums of this table MUST reconcile to total_spend to the cent — a mismatch means rows were dropped, not a rounding issue.",
-        sql="SELECT substring(toString(timestamp),1,16) ts, coalesce(nullIf(toString(person.properties.email),''), concat('anon:', substring(toString(person_id),1,8))) user, coalesce(nullIf(toString(properties.model),''),'(blank)') model, round(toFloat64OrNull(toString(properties.cost_usd)),4) cost_usd, if(toString(properties.byok)='true','byok','platform') key_type, coalesce(toString(properties.project_id),'') project_id FROM events WHERE event='ai_generation_metered' {env_filter} " + _RANGE + " ORDER BY timestamp LIMIT 500"
+        sql="SELECT substring(toString(timestamp),1,16) ts, coalesce(nullIf(toString(person.properties.email),''), nullIf(toString(person.properties.display_name),''), nullIf(toString(person.properties.name),''), concat('anon:', substring(toString(person_id),1,8))) user, coalesce(nullIf(toString(properties.model),''),'(blank)') model, round(toFloat64OrNull(toString(properties.cost_usd)),4) cost_usd, if(toString(properties.byok)='true','byok','platform') key_type, coalesce(toString(properties.project_id),'') project_id FROM events WHERE event='ai_generation_metered' {env_filter} " + _RANGE + " ORDER BY timestamp LIMIT 500"
     ),
     "cost_by_model": Metric(
         key="cost_by_model", title="Cost by model", shape="rows",
@@ -545,7 +545,7 @@ glob METRICS: dict[str, Metric] = {
         key="project_cost_rollup", title="Cost by project", shape="rows",
         definition="Metered AI spend per project: owner, runs, total dollars, and which models ran.",
         caveat="Joins on the project_id stamped on AI events — projects with zero AI runs don't appear (project_created carries no project_id).",
-        sql="SELECT coalesce(nullIf(toString(properties.project_id),''),'(none)') project_id, coalesce(nullIf(toString(any(person.properties.email)),''), concat('anon:', substring(toString(any(person_id)),1,8))) owner, count() runs, round(sum(toFloat64OrNull(toString(properties.cost_usd))),2) total_usd, arrayStringConcat(groupUniqArray(coalesce(nullIf(toString(properties.model),''),'(blank)')), ', ') models FROM events WHERE event='ai_generation_metered' {env_filter} " + _RANGE + " GROUP BY project_id ORDER BY total_usd DESC LIMIT 100"
+        sql="SELECT coalesce(nullIf(toString(properties.project_id),''),'(none)') project_id, coalesce(nullIf(toString(any(person.properties.email)),''), nullIf(toString(any(person.properties.display_name)),''), nullIf(toString(any(person.properties.name)),''), concat('anon:', substring(toString(any(person_id)),1,8))) owner, count() runs, round(sum(toFloat64OrNull(toString(properties.cost_usd))),2) total_usd, arrayStringConcat(groupUniqArray(coalesce(nullIf(toString(properties.model),''),'(blank)')), ', ') models FROM events WHERE event='ai_generation_metered' {env_filter} " + _RANGE + " GROUP BY project_id ORDER BY total_usd DESC LIMIT 100"
     ),
     "byok_split": Metric(
         key="byok_split", title="BYOK vs platform keys", shape="rows",
@@ -557,7 +557,7 @@ glob METRICS: dict[str, Metric] = {
         key="upgrades_detail", title="Completed upgrades (row level)", shape="rows",
         definition="Every completed paid upgrade: time, user, from→to plan, interval, and the actual checkout amount.",
         caveat="amount_usd is the real checkout value — compute revenue from it, never from list prices.",
-        sql="SELECT substring(toString(timestamp),1,16) ts, coalesce(nullIf(toString(person.properties.email),''), concat('anon:', substring(toString(person_id),1,8))) user, coalesce(toString(properties.plan_from),'') plan_from, coalesce(toString(properties.plan),'') plan, coalesce(toString(properties.interval),'') billing_interval, round(toFloat64OrNull(toString(properties.amount_usd)),2) amount_usd, toString(properties.is_first_upgrade) first_upgrade FROM events WHERE event='upgrade_checkout_succeeded' {env_filter} " + _RANGE + " ORDER BY timestamp LIMIT 200"
+        sql="SELECT substring(toString(timestamp),1,16) ts, coalesce(nullIf(toString(person.properties.email),''), nullIf(toString(person.properties.display_name),''), nullIf(toString(person.properties.name),''), concat('anon:', substring(toString(person_id),1,8))) user, coalesce(toString(properties.plan_from),'') plan_from, coalesce(toString(properties.plan),'') plan, coalesce(toString(properties.interval),'') billing_interval, round(toFloat64OrNull(toString(properties.amount_usd)),2) amount_usd, toString(properties.is_first_upgrade) first_upgrade FROM events WHERE event='upgrade_checkout_succeeded' {env_filter} " + _RANGE + " ORDER BY timestamp LIMIT 200"
     ),
     "deploy_outcomes": Metric(
         key="deploy_outcomes", title="Deploy outcomes", shape="rows",
@@ -581,7 +581,7 @@ glob METRICS: dict[str, Metric] = {
         key="issue_log", title="Issues & friction log", shape="rows", good_when_up=False,
         definition="Everything that went wrong, across all failure families: AI failures, quota blocks, preview/deploy/GitHub/checkout failures, and user-aborted turns — with who hit each.",
         caveat="This is the honest issues source — ai_issue_reported alone (the in-app report button) massively undercounts friction.",
-        sql="SELECT multiIf(event='ai_message_failed','AI generation failed', event='ai_message_blocked_quota','Blocked by quota', event='preview_start_failed','Preview failed', event='deploy_sandbox_failed','Sandbox deploy failed', event='deploy_production_failed','Production deploy failed', event='github_connect_failed','GitHub connect failed', event='upgrade_checkout_failed','Upgrade checkout failed', event='ai_user_aborted','User aborted AI turn', event='ai_issue_reported','Issue reported in-app', event) issue, count() n, uniq(person_id) users, arrayStringConcat(arraySlice(groupUniqArray(coalesce(nullIf(toString(person.properties.email),''), concat('anon:', substring(toString(person_id),1,8)))),1,6), ', ') who FROM events WHERE event IN ('ai_message_failed','ai_message_blocked_quota','preview_start_failed','deploy_sandbox_failed','deploy_production_failed','github_connect_failed','upgrade_checkout_failed','ai_user_aborted','ai_issue_reported') {env_filter} " + _RANGE + " GROUP BY issue ORDER BY n DESC"
+        sql="SELECT multiIf(event='ai_message_failed','AI generation failed', event='ai_message_blocked_quota','Blocked by quota', event='preview_start_failed','Preview failed', event='deploy_sandbox_failed','Sandbox deploy failed', event='deploy_production_failed','Production deploy failed', event='github_connect_failed','GitHub connect failed', event='upgrade_checkout_failed','Upgrade checkout failed', event='ai_user_aborted','User aborted AI turn', event='ai_issue_reported','Issue reported in-app', event) issue, count() n, uniq(person_id) users, arrayStringConcat(arraySlice(groupUniqArray(coalesce(nullIf(toString(person.properties.email),''), nullIf(toString(person.properties.display_name),''), nullIf(toString(person.properties.name),''), concat('anon:', substring(toString(person_id),1,8)))),1,6), ', ') who FROM events WHERE event IN ('ai_message_failed','ai_message_blocked_quota','preview_start_failed','deploy_sandbox_failed','deploy_production_failed','github_connect_failed','upgrade_checkout_failed','ai_user_aborted','ai_issue_reported') {env_filter} " + _RANGE + " GROUP BY issue ORDER BY n DESC"
     )
 };
 
@@ -2239,6 +2239,102 @@ def:priv window_remove(name: str) -> list {
         del v;
     }
     return window_list();
+}
+
+# ---------------------------------------------------------------------------
+# User 360 (Phase 1 of USER_360_BUILD_SPEC — PostHog-only, zero product-backend
+# coupling). Drill-down target for every clickable user cell: profile, window
+# counters, cost by model, projects, recent activity timeline — one request.
+# ---------------------------------------------------------------------------
+
+# The identity shown in tables is email OR display_name OR name OR 'anon:<pid8>'.
+# Build a WHERE predicate that finds that person again. Values are quote-stripped
+# (identity strings never legitimately contain quotes/backslashes).
+def _who_predicate(user: str) -> str {
+    u = re.sub(r"['\\\\]", "", user.strip());
+    if u.startswith("anon:") {
+        return "startsWith(toString(person_id), '" + re.sub(r"[^0-9a-f-]", "", u[5:]) + "')";
+    }
+    return ("(coalesce(toString(person.properties.email),'') = '" + u + "'"
+        + " OR coalesce(toString(person.properties.display_name),'') = '" + u + "'"
+        + " OR coalesce(toString(person.properties.name),'') = '" + u + "')");
+}
+
+async def:priv user_360(user: str, env: str) -> dict {
+    env = _clamp_env(env);
+    ef = env_filter(env);
+    win = "AND timestamp > now() - INTERVAL 30 DAY";
+    # Two-step: resolve the person_id once (identity predicates need the persons
+    # join — fine for one windowed lookup), then run every panel against the bare
+    # person_id. Person-prop predicates in 5 parallel queries 504 ClickHouse.
+    q_pid = ("SELECT toString(person_id) pid FROM events WHERE " + _who_predicate(user)
+        + " " + ef + " " + win + " LIMIT 1");
+    pres = await asyncio.to_thread(run_hogql, q_pid);
+    if ("error" in pres) or (not (pres.get("results") or [])) {
+        return {"user": user, "window": "last 30 days",
+                "error": "user not found in the last 30 days" if "error" not in pres else str(pres["error"])[:120],
+                "profile": {"columns": [], "rows": []}, "summary": {"columns": [], "rows": []},
+                "models": {"columns": [], "rows": []}, "projects": {"columns": [], "rows": []},
+                "timeline": {"columns": [], "rows": []}};
+    }
+    pid = re.sub(r"[^0-9a-f-]", "", str(((pres["results"] as list)[0] as list)[0]));
+    who = "toString(person_id) = '" + pid + "'";
+    # Same 30d window as every other panel — a wider min/max over the person-join
+    # predicate 504s ClickHouse (aggregates can't short-circuit like ORDER BY LIMIT).
+    q_profile = ("SELECT coalesce(toString(any(person.properties.email)),'') email,"
+        + " coalesce(toString(any(person.properties.display_name)),'') display_name,"
+        + " coalesce(toString(any(person.properties.name)),'') person_name,"
+        + " coalesce(toString(any(person.properties.plan)),'') plan,"
+        + " coalesce(toString(any(person.properties.auth_provider)),'') auth_provider,"
+        + " substring(toString(min(timestamp)),1,16) first_seen,"
+        + " substring(toString(max(timestamp)),1,16) last_seen, count() events"
+        + " FROM events WHERE " + who + " " + ef + " " + win);
+    q_summary = ("SELECT countIf(event='auth_signup_succeeded') signed_up,"
+        + " countIf(event='project_created') projects, countIf(event='ai_message_sent') ai_turns,"
+        + " countIf(event='ai_message_completed') ai_done, countIf(event='ai_message_failed') ai_failed,"
+        + " round(sumIf(toFloat64OrNull(toString(properties.cost_usd)), event='ai_generation_metered'),2) cost_usd,"
+        + " countIf(event='preview_ready') previews,"
+        + " countIf(event IN ('deploy_sandbox_succeeded','deploy_production_succeeded')) deploys_ok,"
+        + " countIf(event IN ('deploy_sandbox_failed','deploy_production_failed')) deploys_failed,"
+        + " countIf(event='github_connect_succeeded') gh_ok,"
+        + " countIf(event='upgrade_checkout_succeeded') upgrades"
+        + " FROM events WHERE " + who + " " + ef + " " + win);
+    q_models = ("SELECT coalesce(nullIf(toString(properties.model),''),'(blank)') model, count() runs,"
+        + " round(sum(toFloat64OrNull(toString(properties.cost_usd))),2) total_usd"
+        + " FROM events WHERE event='ai_generation_metered' AND " + who + " " + ef + " " + win
+        + " GROUP BY model ORDER BY total_usd DESC LIMIT 10");
+    q_projects = ("SELECT coalesce(nullIf(toString(properties.project_id),''),'(none)') project_id,"
+        + " count() runs, round(sum(toFloat64OrNull(toString(properties.cost_usd))),2) cost_usd,"
+        + " substring(toString(max(timestamp)),1,16) last_activity"
+        + " FROM events WHERE event='ai_generation_metered' AND " + who + " " + ef + " " + win
+        + " GROUP BY project_id ORDER BY cost_usd DESC LIMIT 20");
+    q_timeline = ("SELECT substring(toString(timestamp),1,16) ts, event,"
+        + " coalesce(nullIf(toString(properties.model),''), nullIf(toString(properties.reason),''),"
+        + " nullIf(toString(properties.plan),''), nullIf(toString(properties.source),''), '') detail"
+        + " FROM events WHERE " + who + " " + ef + " " + win
+        + " AND event NOT IN ('$pageview','$pageleave','$web_vitals','$set','$identify','app_loaded')"
+        + " ORDER BY timestamp DESC LIMIT 40");
+    results = await asyncio.gather(
+        asyncio.to_thread(run_hogql, q_profile),
+        asyncio.to_thread(run_hogql, q_summary),
+        asyncio.to_thread(run_hogql, q_models),
+        asyncio.to_thread(run_hogql, q_projects),
+        asyncio.to_thread(run_hogql, q_timeline)
+    );
+    out: dict = {"user": user, "window": "last 30 days", "error": ""};
+    labels = ["profile", "summary", "models", "projects", "timeline"];
+    i = 0;
+    for res in results {
+        rd = res as dict;
+        if "error" in rd {
+            out[labels[i]] = {"columns": [], "rows": []};
+            out["error"] = str(rd["error"])[:120];
+        } else {
+            out[labels[i]] = {"columns": rd["columns"], "rows": rd["results"]};
+        }
+        i = i + 1;
+    }
+    return out;
 }
 
 # ---------------------------------------------------------------------------

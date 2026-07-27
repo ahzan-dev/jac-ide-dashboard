@@ -258,12 +258,16 @@ def:pub VBarTile(title: str, data: any, loading: bool) -> JsxElement {
 def:pub TableTile(title: str, data: any, loading: bool) -> JsxElement {
     cols = (data["columns"] as list) if (data and (not loading)) else [];
     raw = (data["rows"] as list) if (data and (not loading)) else [];
+    env = "prod";
+    if data and (not loading) {
+        env = str(((data["meta"] if data["meta"] else {}) as dict).get("env", "prod"));
+    }
 
     return <Frame title={title} data={data}>
         {if loading {
             <Skeleton className="h-40 w-full" />
         } else {
-            <DataTable columns={cols} rows={raw} />
+            <DataTable columns={cols} rows={raw} env={env} />
         }}
     </Frame>;
 }

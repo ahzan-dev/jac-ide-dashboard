@@ -13,6 +13,10 @@ import from ..ui.input { Input }
 import from ..ui.button { Button }
 import from ..ui.select { Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectItem }
 import from .util { fmt_num, pct1 }
+import from .UserPeek { UserPeek }
+
+# Columns whose cells drill through to the User 360 panel.
+glob USER_COLS: list[str] = ["user", "owner", "email"];
 
 # Numeric-looking = optional leading '-', digits, at most one '.'. Anything else
 # (emails, models, plans, ids, dates) renders as-is — fmt_num on text is NaN.
@@ -130,6 +134,18 @@ def sorted_rows(rows: list, ci: int, desc: bool) -> list {
     return out;
 }
 
+# One table cell — branching (clickable user vs plain text) lives in a
+# component BODY, never in a for-slot.
+def CellVal(cc: dict, on_user: Callable[[str], None]) -> JsxElement {
+    def h(e: MouseEvent) {
+        on_user(str(cc["v"]));
+    }
+    if cc["click"] as bool {
+        return <button type="button" onClick={h} className="cursor-pointer text-left underline decoration-dotted underline-offset-2 hover:text-primary">{str(cc["v"])}</button>;
+    }
+    return <span>{str(cc["v"])}</span>;
+}
+
 # Sortable column header (named component — callbacks never inline).
 def HeadBtn(label: str, idx: int, marker: str, on_sort: Callable[[int], None]) -> JsxElement {
     def h(e: MouseEvent) {
@@ -141,12 +157,20 @@ def HeadBtn(label: str, idx: int, marker: str, on_sort: Callable[[int], None]) -
     </button>;
 }
 
-def:pub DataTable(columns: list, rows: list) -> JsxElement {
+def:pub DataTable(columns: list, rows: list, env: str) -> JsxElement {
     has q: str = "";
     has sort_col: int = -1;
     has sort_desc: bool = True;
     has page: int = 0;
     has page_size: int = 10;
+    has sel_user: str = "";
+
+    def pick_user(u: str) {
+        sel_user = u;
+    }
+    def close_peek() {
+        sel_user = "";
+    }
 
     def on_q(e: Event) {
         q = e.target.value as str;
@@ -243,7 +267,8 @@ def:pub DataTable(columns: list, rows: list) -> JsxElement {
             } elif (cell is not None) and (not numlike(cell)) {
                 align = "";
             }
-            cells = cells + [{"k": str(ci), "v": val, "a": align}];
+            clickable = (str(columns[ci]) in USER_COLS) and (cell is not None) and (val != "");
+            cells = cells + [{"k": str(ci), "v": val, "a": align, "click": clickable}];
             ci = ci + 1;
         }
         frows = frows + [{"k": "r" + str(ri), "cells": cells}];
@@ -290,13 +315,18 @@ def:pub DataTable(columns: list, rows: list) -> JsxElement {
                     {for fr in frows {
                         <TableRow key={str(fr["k"])}>
                             {for cc in fr["cells"] {
-                                <TableCell key={str(cc["k"])} className={"text-xs " + str(cc["a"])}>{str(cc["v"])}</TableCell>
+                                <TableCell key={str(cc["k"])} className={"text-xs " + str(cc["a"])}>
+                                    <CellVal cc={cc} on_user={pick_user} />
+                                </TableCell>
                             }}
                         </TableRow>
                     }}
                 </TableBody>
             </Table>
         </div>
+        {if sel_user != "" {
+            <UserPeek user={sel_user} env={env} on_close={close_peek} />
+        }}
         {if show_controls and (pages > 1 or total > 10) {
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
