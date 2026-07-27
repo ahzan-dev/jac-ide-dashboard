@@ -864,6 +864,7 @@ glob _SCHEMA_DOC: str = "TABLE events — one row per tracked product event.\n"
     + "Person/event props for identity: properties.email, properties.display_name, properties.name, properties.plan (free/builder/pro). properties.method on auth_signup_succeeded is the LOGIN method (password/google/github) — NOT a marketing channel. properties.provider / properties.auth_provider do NOT exist.\n"
     + "ACQUISITION CHANNEL: first-touch UTM/referrer are captured. On CLIENT events they ride as super-properties (properties.utm_source/utm_medium/utm_campaign/utm_content/referrer/initial_referring_domain/landing_path); they are ALSO threaded explicitly onto the server-emitted auth_signup_succeeded, so channel attribution for SIGNUPS must read utm_* off auth_signup_succeeded (empty = direct/no campaign). Use these (NOT login method) for channel/campaign attribution.\n"
     + "PRIVACY: by default prompt/message TEXT is NOT stored on the core events. EXCEPTION: when transcript capture is enabled, the ai_turn_transcript event carries properties.prompt (user's message) + properties.response (AI's final reply) + message_id (joins to ai_message_completed) — the raw material for per-user satisfaction analysis. It stores ONLY prompt+reply, never the intermediate steps. Do not expect content on any other event.\n"
+    + "CONVERSATIONS: ai_turn_transcript ALSO carries properties.conversation_id (groups a user's turns into one chat thread), properties.turn_number (1-based order within that thread), properties.model, properties.project_id, properties.files_changed (a COUNT) and properties.is_error. So conversation shape is answerable from this event alone — e.g. turns per conversation = count() GROUP BY conversation_id; no join to ai_message_completed needed. conversation_id/turn_number/model are on ai_message_sent + ai_message_completed too. CAVEAT: ai_turn_transcript is opt-in (JAC_STORE_AI_TRANSCRIPTS) and currently returns ZERO rows in every environment — if a question needs it, say so rather than reporting 0 as an answer.\n"
     + "person_id is the stable user id (email/display_name may be sparse). Use LIMIT for lists (server caps at 200).";
 
 obj QueryPlan {
@@ -1081,7 +1082,7 @@ def:priv search_history() -> list {
     for e in [root -->][?:SearchEntry] {
         out = out + [{"question": e.question, "last_value": e.last_value, "last_kind": e.last_kind, "last_ts": e.last_ts, "run_count": e.run_count}];
     }
-    out.sort(key=lambda r: dict : str(r["last_ts"]), reverse=True);
+    out.sort(key=lambda (r: dict) { str(r["last_ts"]); }, reverse=True);
     return out;
 }
 
@@ -1115,7 +1116,7 @@ async def:priv suggest_next() -> dict {
     if len(recents) == 0 {
         return empty;
     }
-    recents.sort(key=lambda r: dict : str(r["ts"]), reverse=True);
+    recents.sort(key=lambda (r: dict) { str(r["ts"]); }, reverse=True);
     lines = [];
     i = 0;
     for r in recents {
@@ -1150,7 +1151,7 @@ def:priv thread_list() -> list {
     for t in [root -->][?:Thread] {
         out = out + [{"id": jid(t), "title": t.title, "updated_at": t.updated_at, "count": len(t.messages)}];
     }
-    out.sort(key=lambda r: dict : str(r["updated_at"]), reverse=True);
+    out.sort(key=lambda (r: dict) { str(r["updated_at"]); }, reverse=True);
     return out;
 }
 

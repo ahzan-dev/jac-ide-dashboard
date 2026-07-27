@@ -18,9 +18,25 @@ Internal, read-only analytics cockpit. Full-stack Jac app. Reads PostHog via ser
 - Honest tiles: each carries its exact definition, window, and small-N/proxy caveat.
 - HogQL: presence = `coalesce(toString(properties.X),'') != ''`; numbers = `toFloat64OrNull(toString(...))`.
 
-## Toolchain reality (⚠ CHANGED 2026-07-10 — jaclang shipped a big breaking release)
+## Toolchain reality (⚠ CHANGED 2026-07-10; re-aligned 2026-07-27 to jaclang 0.34.1)
 **RUN with the native dev `jac`** (`~/.local/bin/jac` → `~/Documents/jaseci/jaseci/jac/zig-out/bin/jac`,
-"dev mode", jaclang 0.31, py3.14). The old pip `~/.jacvenv` is gone. Per
+"dev mode", **jaclang 0.34.1**, py3.14). The old pip `~/.jacvenv` is gone.
+
+**0.33/0.34 clean-break re-alignment (2026-07-27 — verified: app boots, 27/27 tests pass, live prod data):**
+- **Expression lambdas are GONE**: `lambda r: dict : expr` is a parse error. Use the braced block form —
+  `lambda (r: dict) { expr; }` (single expression statement = implicit return). Fixed 3 sort-key sites in
+  `metrics_sv.jac`. The rest of the 0.33/0.34 removals (`&&`/`||`, `global`/`nonlocal`, `(?:...)` filters,
+  `root()`, `by postinit`, can-style defs, `abs`→`abst`) did not appear in this codebase.
+- **`jac check` can PASS while `jac start` fails** — the lambda parse errors only surfaced at start. Trust
+  `jac start` as the authoritative compile.
+- **Python deps must be in `jac.toml [dependencies]`** — the hermetic runtime (`~/.cache/jac/rt/...`) sees no
+  pip site-packages. `stripe` was missing (`No module named 'stripe'` at boot) → `jac install stripe` (the
+  renamed `jac add`) added `stripe ~=15.3`.
+- **REST auth body changed again**: `/user/login` takes `{"identity":{"type":"username","value":"admin"},
+  "credential":{"type":"password","password":"..."}}` — a flat `"identity":"admin"` now 422s. Response is an
+  envelope; token is at `data.token` (~321 chars, plus `user_id`/`root_id`/`role`). `/user/register` keeps the
+  identities-array form. `/function/*` bodies are flat named params and `refresh` is REQUIRED (422 if omitted);
+  unauth → 401. Per
 docs.jaseci.org/community/breaking-changes: the **pluggy plugin/hook system was removed** (`hookimpl` gone) and
 **byllm + jac-scale are folded into jaclang core** — no back-compat shims. Consequences that WILL bite:
 - **byLLM import is `import from jaclang.byllm.lib { Model }`** (was `byllm.lib`). **Do NOT `jac install byllm`** —

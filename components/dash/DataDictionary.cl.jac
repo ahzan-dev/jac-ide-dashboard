@@ -16,10 +16,9 @@ glob EVENTS: list = [
     {"cat": "AI engine", "event": "ai_message_completed", "props": "duration_ms, files_changed, tool_call_count, response_length", "powers": "North Star, TTFV, gen-success, latency", "status": "🟢"},
     {"cat": "AI engine", "event": "ai_message_failed", "props": "reason, at_phase, duration_ms", "powers": "Failure breakdown", "status": "🟢"},
     {"cat": "AI engine", "event": "ai_user_aborted", "props": "duration_ms", "powers": "Give-up signal", "status": "🟢"},
-    {"cat": "AI engine", "event": "ai_message_reverted", "props": "—", "powers": "Quality proxy (until generation_kept)", "status": "🟢"},
+    {"cat": "AI engine", "event": "ai_message_reverted", "props": "—", "powers": "Acceptance signal (kept = not reverted)", "status": "🟢"},
     {"cat": "AI engine", "event": "ai_response_rated", "props": "rating, message_id, files_changed", "powers": "AI Quality: helpful-rate, quality-by-model", "status": "🔴"},
     {"cat": "AI engine", "event": "ai_issue_reported", "props": "category, message_id", "powers": "Feedback / roadmap signal", "status": "🔴"},
-    {"cat": "AI engine", "event": "generation_kept", "props": "message_id, project_id", "powers": "Acceptance (the real 'kept' signal)", "status": "🔴"},
     {"cat": "Preview", "event": "preview_start_requested", "props": "was_prepared", "powers": "Reliability denominator", "status": "🟢"},
     {"cat": "Preview", "event": "preview_ready", "props": "duration_ms", "powers": "North Star, reliability numerator", "status": "🟢"},
     {"cat": "Preview", "event": "preview_start_failed", "props": "reason, phase", "powers": "Reliability failures", "status": "🟢"},
@@ -69,10 +68,17 @@ def:pub DataDictionary() -> JsxElement {
         }
     }
 
+    # Derived, not hand-counted: the hardcoded "26" had silently drifted to 30
+    # actual rows. Built here in the body (JSX slots stay trivial).
+    caption = ("The " + str(len(EVENTS)) + " CORE events the dashboard depends on."
+        + " 🟢 live · 🟡 pending deploy/config · 🔴 not yet instrumented."
+        + " Full contract: .docs/posthog/EVENT_CATALOG.md."
+        + " · 'Metrics' = live count of registry metrics using each event.");
+
     return <Card className="w-full">
         <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Data dictionary</CardTitle>
-            <CardDescription className="text-xs">The 26 CORE events the dashboard depends on. 🟢 live · 🟡 pending deploy/config · 🔴 not yet instrumented. Full contract: .docs/posthog/EVENT_CATALOG.md. · 'Metrics' = live count of registry metrics using each event.</CardDescription>
+            <CardDescription className="text-xs">{caption}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
             <Input value={query} onChange={on_search} placeholder="Search events, properties, what they power…" className="h-8 max-w-sm text-xs" />

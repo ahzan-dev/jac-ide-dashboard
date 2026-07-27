@@ -47,7 +47,17 @@ Audit each of these fires in the listed file with the listed props. `⚠` = know
 | `ai_response_edited` 🆕✨ | `message_id`, `time_to_edit_ms`, `files_changed` | Real acceptance signal — user manually edited AI output (`ai_edits`); replaces the weak kept/revert proxies | `useIDE.cl.jac` (`saveFile` on an AI-authored file) |
 | `ai_message_failed` | `reason`, `at_phase`, `duration_ms`, `model`/`conversation_id`/`turn_number` 🆕✨ | Failure breakdown | `useChatMode.cl.jac` |
 | `ai_user_aborted` | `duration_ms` | Give-up signal | `useChatMode.cl.jac` |
-| `ai_message_reverted` | `conversation_id`/`turn_number` 🆕✨ | Quality proxy (until `generation_kept`) | `useChatMode.cl.jac` |
+| `ai_message_reverted` | `conversation_id`/`turn_number` 🆕✨ | Acceptance signal (kept = not reverted) | `useChatMode.cl.jac` |
+| `ai_turn_transcript` 🆕✨ | `prompt`, `response` (each truncated 4k), `message_id`, `conversation_id`/`turn_number`/`model` 🆕✨, `project_id`, `files_changed` (a COUNT), `is_error`, `source` | Per-user satisfaction analysis; conversation shape (turns per thread) without a join | `ideServer.jac` (`ai_chat` walker, server-side) |
+
+> **`ai_turn_transcript` is the ONE event carrying message text**, and it is **opt-in** behind
+> `JAC_STORE_AI_TRANSCRIPTS` (server env). It is **not set on prod** — the event returns **zero rows in
+> every environment** today, so any tile or Ask answer needing it is blocked, not empty. It stores only the
+> user prompt + the AI's final reply, never the intermediate steps (the "N steps · view activity" card in
+> the IDE is client-side render text, never persisted). Caveat for analysis: some `prompt` values are
+> machine-written, not typed — the preview's **Fix errors** button sends the error dump as a user message
+> (prefix `Fix the following errors in the preview:`), as do the editor's *Explain this code* / *Fix with
+> AI* actions. There is no `prompt_source` property to separate them.
 
 > **AI threading.** `conversation_id` is a **client-minted thread id** (not the jac-coder session id) minted at the first send and reused across the turn's events, so `sent`/`completed` always agree. `turn_number` is shared via a ref between the two. `message_id` is a **client-minted UUID** reused synchronously and persisted as the `JacCoderMessage` id — that's what finally gives `ai_response_rated`/`ai_issue_reported` a non-empty id. `model` is the model that **actually ran** (from the start report), now on the timing events, not only `ai_generation_metered`.
 
@@ -117,7 +127,7 @@ Audit each of these fires in the listed file with the listed props. `⚠` = know
 
 ---
 
-## Secondary (48) — keep firing, do NOT build tiles on them
+## Secondary (44) — keep firing, do NOT build tiles on them
 
 Free insurance for future deep-dives. Not part of the dashboard contract.
 
@@ -125,15 +135,39 @@ Free insurance for future deep-dives. Not part of the dashboard contract.
 **Guest:** `guest_home_viewed` · `guest_chip_clicked` · `guest_prompt_submitted` · `guest_locked_feature_clicked`
 **Dashboard UI:** `dashboard_viewed` · `dashboard_prompt_submitted`* · `dashboard_suggestion_clicked`
 **Projects (edge/error):** `project_creation_failed` · `project_creation_blocked_quota` · `project_deleted` · `project_share_failed` · `project_share_blocked_quota`
-**IDE UI:** `ide_v2_tab_changed` · `inspector_element_selected` · `intent_dispatched`
-**AI UI:** `ai_image_attached` · `ai_message_blocked_quota` · `ai_model_switched_from_chat` (feeds `model_mix`) · `ai_model_locked_clicked_from_chat` · `ai_message_start_retry`
-**Preview UI:** `preview_tab_changed` · `preview_viewport_changed` · `preview_link_shared` · `preview_share_menu_opened`
+**IDE UI:** `intent_dispatched`
+**AI UI:** `ai_image_attached` · `ai_message_blocked_quota` · `ai_model_switched_from_chat` (feeds `model_mix`) · `ai_model_locked_clicked_from_chat`
+**Preview UI:** `preview_link_shared` · `preview_share_menu_opened`
 **Git/GitHub (edge):** `git_commit_attempted` · `git_commit_failed` · `github_connect_clicked` · `github_connect_failed`
 **Deploy upsell:** `deploy_sandbox_upgrade_clicked` · `deploy_production_upgrade_clicked`
-**Deploy/hero UI** (from the deploy-hero work, props not yet audited): `dashboard_card_deploy_clicked` · `sidebar_deploy_clicked` · `deploy_hero_github_import` · `hero_mode_changed`
 **Billing UI/edge:** `chat_credit_pill_clicked` · `low_credit_cta_clicked` · `usage_tab_viewed` · `upgrade_checkout_failed` · `upgrade_modified` · `topup_checkout_failed` · `free_signup_bonus_shown` · `free_signup_bonus_cta_clicked` · `free_signup_bonus_dismissed`
 **Notifications:** `notif_nudge_accepted` · `notif_nudge_dismissed`
 **Misc:** `not_found_viewed`
+
+## Removed (10) — no longer fire, do NOT write queries against them
+
+Cut from the product in `jac-ide` (branch `feat/posthog-tracking-gaps`). They fired
+into the void: none were read by a tile, the registry, or the Ask planner. Listed
+here so a stale PostHog insight pointing at one is explainable rather than a mystery.
+Historical rows before the cut date remain queryable.
+
+| Event | Was | Why cut |
+|---|---|---|
+| `ide_v2_tab_changed` | IDE UI | Per-click chatter, fired on every tab switch — the noisiest of the set. |
+| `inspector_element_selected` | IDE UI | Per-click, unread. |
+| `preview_tab_changed` | Preview UI | Per-click, unread. |
+| `preview_viewport_changed` | Preview UI | Per-click, unread. |
+| `sidebar_deploy_clicked` | Deploy/hero UI | Deploy entry-point click; the funnel is measured by the `deploy_*` events that follow. |
+| `dashboard_card_deploy_clicked` | Deploy/hero UI | Same — entry-point click, superseded by the deploy funnel. |
+| `deploy_hero_github_import` | Deploy/hero UI | Same. |
+| `hero_mode_changed` | Deploy/hero UI | UI toggle, unread. Mode still persists to localStorage. |
+| `generation_kept` | AI engine | Acceptance is derived from revert data instead (`kept_weekly`, `revert_rate`). Never wired to a tile. |
+| `ai_message_start_retry` | AI UI | Transient-retry detail, unread. |
+
+**Kept deliberately:** the `guest_*` events (§Secondary). Guest *IDE usage* is gone,
+but `GuestHome` is still the live logged-out landing page, so these are the
+pre-signup funnel — unconsumed today, but top-of-funnel, not dead code. The `guest_`
+prefix is now misleading; renaming is a separate decision.
 
 \* `dashboard_prompt_submitted` is a candidate to promote to CORE if we want a top-of-funnel "prompt → project" conversion tile.
 

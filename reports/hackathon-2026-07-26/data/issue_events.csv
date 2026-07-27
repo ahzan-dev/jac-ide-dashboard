@@ -1,0 +1,104 @@
+ts,event,distinct_id,email,reason,phase,model,duration_ms
+2026-07-26 18:03:24.664000,ai_user_aborted,6862a712-c332-410c-a257-90a6ca05951a,sahilnale@icloud.com,,,,20158.0
+2026-07-26 18:41:28.336000,ai_user_aborted,44db7cef-9baa-4d9a-8f13-3459da294a63,aneeshpradhan@acm.org,,,,80049.0
+2026-07-26 18:42:01.941000,ai_message_blocked_quota,2a3e41c1-d566-465f-b9a3-ae14928e3894,kewinszlezingier@gmail.com,AI budget exhausted ($4.00/cycle). Top up or upgrade.,,,
+2026-07-26 19:02:06.656000,ai_message_blocked_quota,6bed846e-e7fe-41c5-a615-12dff3703acb,jacob.a.quion@gmail.com,AI budget exhausted ($4.00/cycle). Top up or upgrade.,,,
+2026-07-26 19:05:04.151000,ai_user_aborted,5a6d03b1-68c8-4f0a-9194-c7fafe7b2448,schan119@calpoly.edu,,,,13416.0
+2026-07-26 19:19:38.098000,ai_message_failed,10b45e8f-f16c-4ee4-94d1-401d783675d2,likhith11ramesh@gmail.com,"litellm.BadRequestError: AnthropicException - b'{""type"":""error"",""error"":{""type"":""invalid_request_error"",""message"":""`temperature` is deprecated for this model.""},""request_id"":""req_011CdRD7NPTVWzsxwY7FKiME""}'",agent,anthropic/claude-fable-5,70244.0
+2026-07-26 19:20:21.297000,ai_message_failed,10b45e8f-f16c-4ee4-94d1-401d783675d2,likhith11ramesh@gmail.com,"litellm.BadRequestError: AnthropicException - b'{""type"":""error"",""error"":{""type"":""invalid_request_error"",""message"":""`temperature` is deprecated for this model.""},""request_id"":""req_011CdRDAYLpqCQ3ek2AeZARn""}'",agent,anthropic/claude-fable-5,11297.0
+2026-07-26 19:20:42.375000,ai_message_failed,10b45e8f-f16c-4ee4-94d1-401d783675d2,likhith11ramesh@gmail.com,"litellm.BadRequestError: AnthropicException - b'{""type"":""error"",""error"":{""type"":""invalid_request_error"",""message"":""`temperature` is deprecated for this model.""},""request_id"":""req_011CdRDC7pjuqha9vJqFC78P""}'",agent,anthropic/claude-opus-5,5159.0
+2026-07-26 19:25:39.351000,ai_user_aborted,369672af-9926-4c01-82d0-f9b8949d93fa,owin@owinrojas.com,,,,21038.0
+2026-07-26 19:25:54.936000,ai_message_failed,10b45e8f-f16c-4ee4-94d1-401d783675d2,likhith11ramesh@gmail.com,"litellm.BadRequestError: AnthropicException - b'{""type"":""error"",""error"":{""type"":""invalid_request_error"",""message"":""`temperature` is deprecated for this model.""},""request_id"":""req_011CdRDayS7TgANs4tKhnp68""}'",agent,anthropic/claude-opus-4-8,12725.0
+2026-07-26 19:27:16.869000,ai_message_blocked_quota,a7c06198-70d4-495e-b5a6-b20f3f949644,kakanisnehil@gmail.com,AI budget exhausted ($4.00/cycle). Top up or upgrade.,,,
+2026-07-26 19:29:45.725000,ai_message_failed,10b45e8f-f16c-4ee4-94d1-401d783675d2,likhith11ramesh@gmail.com,"litellm.BadRequestError: AnthropicException - b'{""type"":""error"",""error"":{""type"":""invalid_request_error"",""message"":""`temperature` is deprecated for this model.""},""request_id"":""req_011CdRDt7RYXUYUsVNj4qEzL""}'",agent,anthropic/claude-opus-4-8,11256.0
+2026-07-26 19:30:46.271000,ai_message_failed,10b45e8f-f16c-4ee4-94d1-401d783675d2,likhith11ramesh@gmail.com,"litellm.BadRequestError: AnthropicException - b'{""type"":""error"",""error"":{""type"":""invalid_request_error"",""message"":""`temperature` is deprecated for this model.""},""request_id"":""req_011CdRDxcBneNXqLw6UXfc8r""}'",agent,anthropic/claude-opus-4-8,11089.0
+2026-07-26 19:33:17.054000,ai_user_aborted,369672af-9926-4c01-82d0-f9b8949d93fa,owin@owinrojas.com,,,,13758.0
+2026-07-26 19:35:04.162000,ai_message_failed,369672af-9926-4c01-82d0-f9b8949d93fa,owin@owinrojas.com,A turn is already in progress for this project; wait for it to finish.,queue,,100736.0
+2026-07-26 19:35:23.618000,ai_message_failed,369672af-9926-4c01-82d0-f9b8949d93fa,owin@owinrojas.com,A turn is already in progress for this project; wait for it to finish.,queue,,120296.0
+2026-07-26 19:38:24.131000,ai_message_failed,10b45e8f-f16c-4ee4-94d1-401d783675d2,likhith11ramesh@gmail.com,"litellm.BadRequestError: AnthropicException - b'{""type"":""error"",""error"":{""type"":""invalid_request_error"",""message"":""`temperature` is deprecated for this model.""},""request_id"":""req_011CdREYKCmyQffonEHTipLV""}'",agent,anthropic/claude-fable-5,11515.0
+2026-07-26 19:40:13.964000,ai_message_failed,10b45e8f-f16c-4ee4-94d1-401d783675d2,likhith11ramesh@gmail.com,"litellm.BadRequestError: AnthropicException - b'{""type"":""error"",""error"":{""type"":""invalid_request_error"",""message"":""`temperature` is deprecated for this model.""},""request_id"":""req_011CdREgVtSbmEE8m4iYyk6c""}'",agent,anthropic/claude-fable-5,10409.0
+2026-07-26 19:41:21.582000,ai_message_failed,10b45e8f-f16c-4ee4-94d1-401d783675d2,likhith11ramesh@gmail.com,"litellm.BadRequestError: AnthropicException - b'{""type"":""error"",""error"":{""type"":""invalid_request_error"",""message"":""`temperature` is deprecated for this model.""},""request_id"":""req_011CdREmRtE2LSnGYkSZsRdx""}'",agent,anthropic/claude-opus-4-8,14283.0
+2026-07-26 19:49:20.541000,ai_message_failed,10b45e8f-f16c-4ee4-94d1-401d783675d2,likhith11ramesh@gmail.com,"litellm.BadRequestError: AnthropicException - b'{""type"":""error"",""error"":{""type"":""invalid_request_error"",""message"":""`temperature` is deprecated for this model.""},""request_id"":""req_011CdRFNjMg8HHgFo9wpmy9Z""}'",agent,anthropic/claude-opus-4-8,10710.0
+2026-07-26 19:49:35.205000,ai_message_failed,10b45e8f-f16c-4ee4-94d1-401d783675d2,likhith11ramesh@gmail.com,"litellm.BadRequestError: AnthropicException - b'{""type"":""error"",""error"":{""type"":""invalid_request_error"",""message"":""`temperature` is deprecated for this model.""},""request_id"":""req_011CdRFPmUhQJdVGiapYwdiQ""}'",agent,anthropic/claude-opus-4-8,6389.0
+2026-07-26 19:50:34.899000,ai_message_failed,10b45e8f-f16c-4ee4-94d1-401d783675d2,likhith11ramesh@gmail.com,This model is no longer in your selected models (Dashboard → AI Models). Pick another model.,queue,anthropic/claude-opus-4-8,460.0
+2026-07-26 19:50:48.374000,ai_message_failed,10b45e8f-f16c-4ee4-94d1-401d783675d2,likhith11ramesh@gmail.com,This model is no longer in your selected models (Dashboard → AI Models). Pick another model.,queue,anthropic/claude-opus-4-8,531.0
+2026-07-26 19:51:41.689000,ai_message_failed,10b45e8f-f16c-4ee4-94d1-401d783675d2,likhith11ramesh@gmail.com,This model is no longer in your selected models (Dashboard → AI Models). Pick another model.,queue,anthropic/claude-opus-4-8,519.0
+2026-07-26 19:52:24.068000,ai_message_failed,10b45e8f-f16c-4ee4-94d1-401d783675d2,likhith11ramesh@gmail.com,This model is no longer in your selected models (Dashboard → AI Models). Pick another model.,queue,,730.0
+2026-07-26 19:55:18.884000,ai_message_failed,10b45e8f-f16c-4ee4-94d1-401d783675d2,likhith11ramesh@gmail.com,"litellm.BadRequestError: AnthropicException - b'{""type"":""error"",""error"":{""type"":""invalid_request_error"",""message"":""`temperature` is deprecated for this model.""},""request_id"":""req_011CdRFq9YwWwPiRAibrd5UV""}'",agent,anthropic/claude-fable-5,70481.0
+2026-07-26 19:59:50.838000,ai_message_failed,10b45e8f-f16c-4ee4-94d1-401d783675d2,likhith11ramesh@gmail.com,"litellm.BadRequestError: AnthropicException - b'{""type"":""error"",""error"":{""type"":""invalid_request_error"",""message"":""`temperature` is deprecated for this model.""},""request_id"":""req_011CdRGBBZJ5M43axWuumeBG""}'",agent,anthropic/claude-fable-5,12033.0
+2026-07-26 20:09:37.761000,ai_user_aborted,230d6afa-945e-48ba-8fe4-090bab974f96,yujiwork@outlook.com,,,,213331.0
+2026-07-26 20:19:14.100000,ai_message_failed,mp@gmail.com,mp@gmail.com,"litellm.BadRequestError: AnthropicException - b'{""type"":""error"",""error"":{""type"":""invalid_request_error"",""message"":""`temperature` is deprecated for this model.""},""request_id"":""req_011CdRHev6Wr5wBy4BVNogJq""}'",agent,anthropic/claude-fable-5,77446.0
+2026-07-26 20:31:01.725000,ai_message_blocked_quota,a7c06198-70d4-495e-b5a6-b20f3f949644,kakanisnehil@gmail.com,AI budget exhausted ($8.00/cycle). Top up or upgrade.,,,
+2026-07-26 20:33:05.851000,ai_user_aborted,43c7c7ca-f19b-46ee-aa95-76eaffb14bbc,benjinisevich2@gmail.com,,,,122351.0
+2026-07-26 20:53:51.752000,ai_user_aborted,5fdcf164-a64d-4432-b3e8-2f8e5932791d,sahasrakokkula77@gmail.com,,,,3351.0
+2026-07-26 21:21:25.503000,ai_user_aborted,c8303677-ed59-4b07-843b-a4dfd8c5aa3e,justin-kang@berkeley.edu,,,,1408.0
+2026-07-26 21:24:36.110000,ai_user_aborted,5fdcf164-a64d-4432-b3e8-2f8e5932791d,sahasrakokkula77@gmail.com,,,,3580.0
+2026-07-26 21:30:07.842000,ai_user_aborted,d8386856-b8aa-40d1-9759-a99cd212f895,chengreric@gmail.com,,,,7684.0
+2026-07-26 21:32:10.990000,ai_message_failed,mp@gmail.com,mp@gmail.com,"litellm.APIError: APIError: OpenrouterException - {""error"":{""message"":""This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3900. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account"",""code"":402,""metadata"":{""provider_name"":null,""previous_errors"":[{""code"":402,""message"":""This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3900. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account""},{""code"":402,""message"":""This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3900. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account""},{""code"":402,""message"":""This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3900. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account""},{""code"":402,""message"":""This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3900. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account""}]}},""user_id"":""user_2vehnMG0V9fThGSnjXB1UrDK91L""}",agent,openrouter/anthropic/claude-sonnet-5,34513.0
+2026-07-26 21:32:38.911000,ai_message_failed,mp@gmail.com,mp@gmail.com,"litellm.APIError: APIError: OpenrouterException - {""error"":{""message"":""This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 2600. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account"",""code"":402,""metadata"":{""provider_name"":null}},""user_id"":""user_2vehnMG0V9fThGSnjXB1UrDK91L""}",agent,openrouter/moonshotai/kimi-k3,6028.0
+2026-07-26 21:33:55.828000,ai_message_failed,mp@gmail.com,mp@gmail.com,"litellm.APIError: APIError: OpenrouterException - {""error"":{""message"":""This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 2364. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account"",""code"":402,""metadata"":{""provider_name"":null,""previous_errors"":[{""code"":402,""message"":""This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 2600. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account""},{""code"":402,""message"":""This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 2600. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account""},{""code"":402,""message"":""This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 2600. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account""},{""code"":402,""message"":""This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 2600. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account""},{""code"":402,""message"":""This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 2600. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account""}]}},""user_id"":""user_2vehnMG0V9fThGSnjXB1UrDK91L""}",agent,openrouter/anthropic/claude-sonnet-4.6,12442.0
+2026-07-26 21:38:33.642000,ai_user_aborted,Rosekr1,,,,,20275.0
+2026-07-26 21:54:15.049000,ai_user_aborted,ea626e57-caa8-449c-97b5-41128e9626df,,,,,11777.0
+2026-07-26 21:55:17.054000,ai_user_aborted,ea626e57-caa8-449c-97b5-41128e9626df,,,,,44423.0
+2026-07-26 22:05:25.263000,ai_user_aborted,e699cf91-8c9d-45ee-a3bd-2a00dde0214e,stepodkelly@gmail.com,,,,1309035.0
+2026-07-26 22:17:45.019000,ai_user_aborted,1f45f5fc-09df-44ca-92f5-d8c83337c310,stevenyang.dev@gmail.com,,,,6169.0
+2026-07-26 22:18:28.691000,ai_message_failed,ea626e57-caa8-449c-97b5-41128e9626df,,Agent did not respond. Please try again.,agent,claude-sonnet-4-6,1365732.0
+2026-07-26 22:19:42.293000,ai_message_failed,1f45f5fc-09df-44ca-92f5-d8c83337c310,stevenyang.dev@gmail.com,A turn is already in progress for this project; wait for it to finish.,queue,claude-sonnet-4-6,105891.0
+2026-07-26 22:20:07.235000,ai_message_failed,7f87c8ac-e0f7-4e92-beae-a748166aada6,mborgiottitulane@gmail.com,Connection lost. Please try again.,agent,claude-sonnet-4-6,511039.0
+2026-07-26 22:20:53.669000,ai_message_failed,7f87c8ac-e0f7-4e92-beae-a748166aada6,mborgiottitulane@gmail.com,A turn is already in progress for this project; wait for it to finish.,queue,claude-sonnet-4-6,374.0
+2026-07-26 22:22:58.794000,ai_message_failed,7f87c8ac-e0f7-4e92-beae-a748166aada6,mborgiottitulane@gmail.com,A turn is already in progress for this project; wait for it to finish.,queue,claude-sonnet-4-6,351.0
+2026-07-26 22:23:41.311000,ai_message_failed,89417778-e09d-4617-8074-6378d52c515b,toledosean@gmail.com,Agent did not respond. Please try again.,agent,claude-opus-4-6,912042.0
+2026-07-26 22:27:59.352000,ai_message_blocked_quota,7f87c8ac-e0f7-4e92-beae-a748166aada6,mborgiottitulane@gmail.com,AI budget exhausted ($4.00/cycle). Top up or upgrade.,,,
+2026-07-26 22:28:42.200000,preview_start_failed,6862a712-c332-410c-a257-90a6ca05951a,sahilnale@icloud.com,max_retries,sandbox_gone,,2925.0
+2026-07-26 22:30:14.650000,ai_message_blocked_quota,7f87c8ac-e0f7-4e92-beae-a748166aada6,mborgiottitulane@gmail.com,AI budget exhausted ($4.00/cycle). Top up or upgrade.,,,
+2026-07-26 22:30:22.583000,ai_message_blocked_quota,7f87c8ac-e0f7-4e92-beae-a748166aada6,mborgiottitulane@gmail.com,AI budget exhausted ($4.00/cycle). Top up or upgrade.,,,
+2026-07-26 22:31:19.728000,ai_message_blocked_quota,7f87c8ac-e0f7-4e92-beae-a748166aada6,mborgiottitulane@gmail.com,AI budget exhausted ($4.00/cycle). Top up or upgrade.,,,
+2026-07-26 22:31:24.070000,ai_message_blocked_quota,7f87c8ac-e0f7-4e92-beae-a748166aada6,mborgiottitulane@gmail.com,AI budget exhausted ($4.00/cycle). Top up or upgrade.,,,
+2026-07-26 22:46:39.095000,ai_user_aborted,89417778-e09d-4617-8074-6378d52c515b,toledosean@gmail.com,,,,149423.0
+2026-07-26 23:11:26.764000,ai_user_aborted,c8303677-ed59-4b07-843b-a4dfd8c5aa3e,justin-kang@berkeley.edu,,,,54544.0
+2026-07-26 23:15:28.976000,ai_message_failed,c8303677-ed59-4b07-843b-a4dfd8c5aa3e,justin-kang@berkeley.edu,Tool.make_finish_tool.<locals>.finish_tool() missing 1 required positional argument: 'final_output',agent,claude-opus-4-6,154298.0
+2026-07-26 23:17:25.881000,ai_user_aborted,84c5757f-550b-4924-b630-f52b32afbe90,rishabh.rb@icloud.com,,,,653788.0
+2026-07-26 23:18:03.121000,ai_user_aborted,c8303677-ed59-4b07-843b-a4dfd8c5aa3e,justin-kang@berkeley.edu,,,,5542.0
+2026-07-26 23:18:18.981000,ai_user_aborted,c8303677-ed59-4b07-843b-a4dfd8c5aa3e,justin-kang@berkeley.edu,,,,13585.0
+2026-07-26 23:36:14.707000,ai_message_blocked_quota,ea626e57-caa8-449c-97b5-41128e9626df,,AI budget exhausted ($11.33/cycle). Top up or upgrade.,,,
+2026-07-27 00:01:57.651000,preview_start_failed,0924ddf2-ea5b-4ce2-8ebb-4c80b319d544,harshjannawar14@gmail.com,max_retries,sandbox_gone,,16393.0
+2026-07-27 00:05:20.031000,ai_message_blocked_quota,2a3e41c1-d566-465f-b9a3-ae14928e3894,kewinszlezingier@gmail.com,AI budget exhausted ($4.00/cycle). Top up or upgrade.,,,
+2026-07-27 00:09:21.023000,ai_user_aborted,ea626e57-caa8-449c-97b5-41128e9626df,,,,,660045.0
+2026-07-27 00:11:20.273000,ai_user_aborted,c8303677-ed59-4b07-843b-a4dfd8c5aa3e,justin-kang@berkeley.edu,,,,6103.0
+2026-07-27 00:12:14.257000,ai_message_failed,c8303677-ed59-4b07-843b-a4dfd8c5aa3e,justin-kang@berkeley.edu,"Exception: Walker ai_chat failed: <html>
+<head><title>504 Gateway Time-out</title></head>
+<body>
+<center><h1>504 Gateway Time-out</h1></center>
+</body>
+</html>
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+",queue,claude-opus-4-6,48529.0
+2026-07-27 00:12:27.064000,ai_message_failed,c8303677-ed59-4b07-843b-a4dfd8c5aa3e,justin-kang@berkeley.edu,"Exception: Walker ai_chat failed: <html>
+<head><title>504 Gateway Time-out</title></head>
+<body>
+<center><h1>504 Gateway Time-out</h1></center>
+</body>
+</html>
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+",queue,claude-opus-4-6,60223.0
+2026-07-27 00:12:30.322000,ai_message_failed,c8303677-ed59-4b07-843b-a4dfd8c5aa3e,justin-kang@berkeley.edu,A turn is already in progress for this project; wait for it to finish.,queue,claude-opus-4-6,510.0
+2026-07-27 00:12:42.327000,ai_message_failed,c8303677-ed59-4b07-843b-a4dfd8c5aa3e,justin-kang@berkeley.edu,A turn is already in progress for this project; wait for it to finish.,queue,claude-opus-4-6,274.0
+2026-07-27 00:12:49.586000,ai_message_failed,c8303677-ed59-4b07-843b-a4dfd8c5aa3e,justin-kang@berkeley.edu,A turn is already in progress for this project; wait for it to finish.,queue,claude-opus-4-6,297.0
+2026-07-27 00:15:37.750000,ai_user_aborted,ea626e57-caa8-449c-97b5-41128e9626df,,,,,357266.0
+2026-07-27 00:20:27.719000,ai_user_aborted,ea626e57-caa8-449c-97b5-41128e9626df,,,,,255800.0
+2026-07-27 00:21:27.917000,ai_message_failed,ea626e57-caa8-449c-97b5-41128e9626df,,A turn is already in progress for this project; wait for it to finish.,queue,claude-sonnet-4-6,342.0
+2026-07-27 00:21:50.125000,ai_message_failed,ea626e57-caa8-449c-97b5-41128e9626df,,A turn is already in progress for this project; wait for it to finish.,queue,claude-sonnet-4-6,459.0
+2026-07-27 00:22:11.131000,ai_message_failed,ea626e57-caa8-449c-97b5-41128e9626df,,A turn is already in progress for this project; wait for it to finish.,queue,claude-sonnet-4-6,10398.0
+2026-07-27 00:22:57.650000,ai_user_aborted,ea626e57-caa8-449c-97b5-41128e9626df,,,,,0.0
+2026-07-27 00:23:39.709000,ai_message_failed,ea626e57-caa8-449c-97b5-41128e9626df,,A turn is already in progress for this project; wait for it to finish.,queue,,627.0
+2026-07-27 00:24:09.037000,ai_message_failed,ea626e57-caa8-449c-97b5-41128e9626df,,A turn is already in progress for this project; wait for it to finish.,queue,,1752.0
