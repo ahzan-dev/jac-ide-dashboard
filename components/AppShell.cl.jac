@@ -1,4 +1,10 @@
 sv import from ..metrics_sv { scope_count, window_list }
+import from "@hugeicons/react" { HugeiconsIcon }
+import from "@hugeicons/core-free-icons" {
+    DashboardSquare01Icon, UserGroupIcon, Message01Icon, CheckmarkBadge01Icon,
+    Analytics01Icon, PuzzleIcon, DollarCircleIcon, Rocket01Icon, Pulse01Icon,
+    Comment01Icon, SparklesIcon, PinIcon, File01Icon, Settings01Icon
+}
 import from .ui.sidebar {
     SidebarProvider, Sidebar, SidebarContent, SidebarHeader, SidebarGroup,
     SidebarGroupLabel, SidebarGroupContent, SidebarMenu, SidebarMenuItem,
@@ -28,28 +34,29 @@ import from .dash.util { iso_days_ago, iso_tomorrow, fmt_num }
 
 # Three-layer IA (redesign plan P2): Summary (5-second page) → Explore
 # (diagnostic breakdowns) → Detail (row-level / build-your-own) → Settings.
+# Icons: HugeIcons (the set jac-shadcn's own components use).
 glob NAV: list = [
     {"group": "Summary", "items": [
-        {"label": "Overview", "page": "overview", "dot": "🟢"}
+        {"label": "Overview", "page": "overview", "icon": DashboardSquare01Icon}
     ]},
     {"group": "Explore", "items": [
-        {"label": "Users & Adoption", "page": "users", "dot": "🟢"},
-        {"label": "AI Requests", "page": "requests", "dot": "🟢"},
-        {"label": "AI Quality", "page": "quality", "dot": "🟢"},
-        {"label": "Advanced Analytics", "page": "advanced", "dot": "🟢"},
-        {"label": "Feature Usage", "page": "features", "dot": "🟢"},
-        {"label": "Cost & Usage", "page": "cost", "dot": "🟢"},
-        {"label": "Developer Impact", "page": "impact", "dot": "🟢"},
-        {"label": "System Health", "page": "health", "dot": "🟢"},
-        {"label": "Feedback & Roadmap", "page": "feedback", "dot": "🟢"}
+        {"label": "Users & Adoption", "page": "users", "icon": UserGroupIcon},
+        {"label": "AI Requests", "page": "requests", "icon": Message01Icon},
+        {"label": "AI Quality", "page": "quality", "icon": CheckmarkBadge01Icon},
+        {"label": "Advanced Analytics", "page": "advanced", "icon": Analytics01Icon},
+        {"label": "Feature Usage", "page": "features", "icon": PuzzleIcon},
+        {"label": "Cost & Usage", "page": "cost", "icon": DollarCircleIcon},
+        {"label": "Developer Impact", "page": "impact", "icon": Rocket01Icon},
+        {"label": "System Health", "page": "health", "icon": Pulse01Icon},
+        {"label": "Feedback & Roadmap", "page": "feedback", "icon": Comment01Icon}
     ]},
     {"group": "Detail", "items": [
-        {"label": "Ask (AI builder)", "page": "ask", "dot": "✨"},
-        {"label": "My Dashboard", "page": "pinned", "dot": "📌"},
-        {"label": "Reports", "page": "reports", "dot": "📄"}
+        {"label": "Ask (AI builder)", "page": "ask", "icon": SparklesIcon},
+        {"label": "My Dashboard", "page": "pinned", "icon": PinIcon},
+        {"label": "Reports", "page": "reports", "icon": File01Icon}
     ]},
     {"group": "Settings", "items": [
-        {"label": "Settings & Data", "page": "settings", "dot": "🟢"}
+        {"label": "Settings & Data", "page": "settings", "icon": Settings01Icon}
     ]}
 ];
 
@@ -84,12 +91,12 @@ def _persist_page(pg: str) {
     }
 }
 
-def NavButton(label: str, dot: str, page: str, active: bool, on_select: Callable[[str], None]) -> JsxElement {
+def NavButton(label: str, icon: any, page: str, active: bool, on_select: Callable[[str], None]) -> JsxElement {
     def handle(e: MouseEvent) {
         on_select(page);
     }
     return <SidebarMenuButton isActive={active} onClick={handle}>
-        <span className="text-xs">{dot}</span>
+        <HugeiconsIcon icon={icon} className="size-4 shrink-0 text-muted-foreground" />
         <span>{label}</span>
     </SidebarMenuButton>;
 }
@@ -200,7 +207,7 @@ def:pub AppShell(on_logout: Callable[[], None]) -> JsxElement {
                                 <SidebarMenu>
                                     {for it in grp["items"] {
                                         <SidebarMenuItem key={str(it["page"])}>
-                                            <NavButton label={str(it["label"])} dot={str(it["dot"])} page={str(it["page"])} active={active_page == it["page"]} on_select={go} />
+                                            <NavButton label={str(it["label"])} icon={it["icon"]} page={str(it["page"])} active={active_page == it["page"]} on_select={go} />
                                         </SidebarMenuItem>
                                     }}
                                 </SidebarMenu>
