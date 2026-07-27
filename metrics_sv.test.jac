@@ -11,11 +11,16 @@
 # ---------------------------------------------------------------------------
 # env filter — the load-bearing "prod ≠ noise" guarantee
 # ---------------------------------------------------------------------------
-test "env_expr prod is super-property OR host allowlist" {
+test "env_expr prod is hardened: jachammer.ai host + host-less server events" {
     e = env_expr("prod");
+    assert "$host = 'jachammer.ai'" in e;
+    # server-emitted events (cost/signups/upgrades) have no $host — the
+    # environment='prod' clause for empty-host events is what admits them
     assert "environment = 'prod'" in e;
-    assert "jachammer.ai" in e;
-    assert "jac-builder.jaseci.org" in e;
+    assert "= ''" in e;
+    # deliberately dropped 2026-07-27
+    assert "jac-builder.jaseci.org" not in e;
+    assert "www.jachammer.ai" not in e;
 }
 test "env_expr dev and preview differ from prod" {
     assert "'dev'" in env_expr("dev");
