@@ -19,7 +19,7 @@ import from ..ui.label { Label }
 import from ..ui.skeleton { Skeleton }
 import from ..ui.select { Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectItem }
 import from ..ui.table { Table, TableHeader, TableBody, TableRow, TableHead, TableCell }
-import from ..dash.util { iso_days_ago }
+import from ..dash.util { iso_days_ago, local_to_utc, utc_to_local, utc_to_local_input, tz_name }
 
 def _span(chart: str) -> str {
     if chart == "stat" or chart == "gauge" {
@@ -220,13 +220,14 @@ def:pub ReportsPage(env: str, date_from: str, date_to: str, refresh_n: int) -> J
         if not f_wname {
             return;
         }
-        windows = (await window_add(f_wname, f_from, f_to)) as list[dict];
+        windows = (await window_add(f_wname, local_to_utc(f_from), local_to_utc(f_to))) as list[dict];
         f_wname = "";
     }
     async def create(e: MouseEvent) {
         creating = True;
         f_error = "";
-        res = (await report_create(f_title, f_from, f_to, env, f_template)) as dict;
+        # inputs are LOCAL time; storage + HogQL stay UTC
+        res = (await report_create(f_title, local_to_utc(f_from), local_to_utc(f_to), env, f_template)) as dict;
         creating = False;
         if str(res.get("error", "")) {
             f_error = str(res["error"]);
@@ -238,6 +239,7 @@ def:pub ReportsPage(env: str, date_from: str, date_to: str, refresh_n: int) -> J
     }
 
     # ---- precompute everything the JSX needs (trivial slots only) -----------
+    tzn = tz_name();
     report_rows: list[dict] = [];
     for r in reports {
         rd = r as dict;
@@ -246,9 +248,9 @@ def:pub ReportsPage(env: str, date_from: str, date_to: str, refresh_n: int) -> J
         blt = str(rd.get("built_at", ""));
         report_rows = report_rows + [{
             "id": str(rd.get("id", "")), "title": str(rd.get("title", "")),
-            "window": fdt[:16] + " → " + tdt[:16],
+            "window": utc_to_local(fdt) + " → " + utc_to_local(tdt),
             "env": str(rd.get("env", "")),
-            "built": blt if blt else "not built"
+            "built": utc_to_local(blt) if blt else "not built"
         }];
     }
 
@@ -258,9 +260,9 @@ def:pub ReportsPage(env: str, date_from: str, date_to: str, refresh_n: int) -> J
     if active_id != "" {
         hdr_title = str(active.get("title", "Report"));
         blt2 = str(active.get("built_at", ""));
-        hdr_sub = str(active.get("from_dt", ""))[:16] + " → " + str(active.get("to_dt", ""))[:16] + " UTC";
+        hdr_sub = utc_to_local(str(active.get("from_dt", ""))) + " → " + utc_to_local(str(active.get("to_dt", ""))) + " (" + tzn + ")";
         if blt2 {
-            hdr_sub = hdr_sub + " · built " + blt2 + " UTC";
+            hdr_sub = hdr_sub + " · built " + utc_to_local(blt2);
         }
         if not building {
             snap = active.get("snapshot", {}) as dict;
@@ -297,8 +299,8 @@ def:pub ReportsPage(env: str, date_from: str, date_to: str, refresh_n: int) -> J
     win_chips: list[dict] = [];
     for w in windows {
         wd = w as dict;
-        wf = str(wd.get("from_dt", "")).replace(" ", "T")[:16];
-        wt = str(wd.get("to_dt", "")).replace(" ", "T")[:16];
+        wf = utc_to_local_input(str(wd.get("from_dt", "")));
+        wt = utc_to_local_input(str(wd.get("to_dt", "")));
         win_chips = win_chips + [{"label": str(wd.get("name", "")), "from": wf, "to": wt}];
     }
     new_btn_label = "Close" if show_form else "+ New report";
@@ -330,7 +332,7 @@ def:pub ReportsPage(env: str, date_from: str, date_to: str, refresh_n: int) -> J
                     <Card>
                         <CardHeader>
                             <CardTitle className="text-sm">New report</CardTitle>
-                            <CardDescription className="text-xs">Window supports minute precision (e.g. a 7.5-hour hackathon). Times are UTC. Environment: {env}.</CardDescription>
+                            <CardDescription className="text-xs">Window supports minute precision (e.g. a 7.5-hour hackathon). Times are your local timezone ({tzn}) — stored and queried as UTC. Environment: {env}.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <div className="grid grid-cols-12 gap-3">
@@ -351,11 +353,11 @@ def:pub ReportsPage(env: str, date_from: str, date_to: str, refresh_n: int) -> J
                                     </Select>
                                 </div>
                                 <div className="col-span-12 sm:col-span-6 flex flex-col gap-1.5">
-                                    <Label className="text-xs">From (UTC)</Label>
+                                    <Label className="text-xs">From (your time)</Label>
                                     <Input type="datetime-local" value={f_from} onChange={on_from} />
                                 </div>
                                 <div className="col-span-12 sm:col-span-6 flex flex-col gap-1.5">
-                                    <Label className="text-xs">To (UTC)</Label>
+                                    <Label className="text-xs">To (your time)</Label>
                                     <Input type="datetime-local" value={f_to} onChange={on_to} />
                                 </div>
                             </div>
@@ -393,7 +395,7 @@ def:pub ReportsPage(env: str, date_from: str, date_to: str, refresh_n: int) -> J
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Title</TableHead>
-                                        <TableHead>Window (UTC)</TableHead>
+                                        <TableHead>Window (local)</TableHead>
                                         <TableHead>Env</TableHead>
                                         <TableHead>Built</TableHead>
                                         <TableHead></TableHead>

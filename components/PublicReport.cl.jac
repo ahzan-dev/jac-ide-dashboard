@@ -7,6 +7,7 @@ import from .ui.card { Card, CardHeader, CardTitle, CardDescription }
 import from .ui.badge { Badge }
 import from .ui.skeleton { Skeleton }
 import from .ui.tooltip { TooltipProvider }
+import from .dash.util { utc_to_local, tz_name }
 
 def _token_from_path() -> str {
     p = str(window.location.pathname);
@@ -44,10 +45,10 @@ def:pub PublicReport() -> JsxElement {
     title = str(rep.get("title", "Report"));
     masked = rep.get("masked", False) as bool;
     if found {
-        hdr_sub = str(rep.get("from_dt", ""))[:16] + " → " + str(rep.get("to_dt", ""))[:16] + " UTC";
+        hdr_sub = utc_to_local(str(rep.get("from_dt", ""))) + " → " + utc_to_local(str(rep.get("to_dt", ""))) + " (" + tz_name() + ")";
         blt = str(rep.get("built_at", ""));
         if blt {
-            hdr_sub = hdr_sub + " · data frozen " + blt + " UTC";
+            hdr_sub = hdr_sub + " · data frozen " + utc_to_local(blt);
         }
         snap = rep.get("snapshot", {}) as dict;
         for s in (rep.get("sections", []) as list) {
