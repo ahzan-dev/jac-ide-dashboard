@@ -1,3 +1,4 @@
+sv import from ..metrics_sv { scope_count, window_list }
 import from .ui.sidebar {
     SidebarProvider, Sidebar, SidebarContent, SidebarHeader, SidebarGroup,
     SidebarGroupLabel, SidebarGroupContent, SidebarMenu, SidebarMenuItem,
@@ -23,32 +24,31 @@ import from .pages.CostPage { CostPage }
 import from .pages.SettingsPage { SettingsPage }
 import from .dash.DateRangePicker { DateRangePicker }
 import from .dash.SavedViews { SavedViews }
-import from .dash.util { iso_days_ago, iso_tomorrow }
+import from .dash.util { iso_days_ago, iso_tomorrow, fmt_num }
 
-# 11-page IA (label, page-key, readiness dot), grouped as in the prototype.
+# Three-layer IA (redesign plan P2): Summary (5-second page) → Explore
+# (diagnostic breakdowns) → Detail (row-level / build-your-own) → Settings.
 glob NAV: list = [
-    {"group": "Dashboard", "items": [
-        {"label": "Ask (AI builder)", "page": "ask", "dot": "✨"},
-        {"label": "My Dashboard", "page": "pinned", "dot": "📌"},
-        {"label": "Reports", "page": "reports", "dot": "📄"},
+    {"group": "Summary", "items": [
         {"label": "Overview", "page": "overview", "dot": "🟢"}
     ]},
-    {"group": "Product", "items": [
+    {"group": "Explore", "items": [
         {"label": "Users & Adoption", "page": "users", "dot": "🟢"},
-        {"label": "Feature Usage", "page": "features", "dot": "🟡"},
-        {"label": "Feedback & Roadmap", "page": "feedback", "dot": "🔴"}
-    ]},
-    {"group": "AI Intelligence", "items": [
         {"label": "AI Requests", "page": "requests", "dot": "🟢"},
         {"label": "AI Quality", "page": "quality", "dot": "🔴"},
-        {"label": "Advanced Analytics", "page": "advanced", "dot": "🟢"}
-    ]},
-    {"group": "Business", "items": [
+        {"label": "Advanced Analytics", "page": "advanced", "dot": "🟢"},
+        {"label": "Feature Usage", "page": "features", "dot": "🟡"},
+        {"label": "Cost & Usage", "page": "cost", "dot": "🟡"},
         {"label": "Developer Impact", "page": "impact", "dot": "🟡"},
-        {"label": "Cost & Usage", "page": "cost", "dot": "🟡"}
-    ]},
-    {"group": "Operations", "items": [
         {"label": "System Health", "page": "health", "dot": "🟡"},
+        {"label": "Feedback & Roadmap", "page": "feedback", "dot": "🔴"}
+    ]},
+    {"group": "Detail", "items": [
+        {"label": "Ask (AI builder)", "page": "ask", "dot": "✨"},
+        {"label": "My Dashboard", "page": "pinned", "dot": "📌"},
+        {"label": "Reports", "page": "reports", "dot": "📄"}
+    ]},
+    {"group": "Settings", "items": [
         {"label": "Settings & Data", "page": "settings", "dot": "🟡"}
     ]}
 ];
@@ -100,6 +100,25 @@ def:pub AppShell(on_logout: Callable[[], None]) -> JsxElement {
     has date_to: str = iso_tomorrow();
     has refresh_n: int = 0;
     has active_page: str = _initial_page();
+    has scope_n: any = None;             # live "events in scope" for the filter bar
+    has windows: list[dict] = [];        # named windows (usable as range presets)
+    has preset: str = "30d";             # today|7d|30d|90d|custom|win:<name>
+
+    # P3: the env+range slice is the most important context on screen — keep a
+    # live count of events in scope so the user always knows what they're seeing.
+    async can with (env, date_from, date_to, refresh_n) entry {
+        try {
+            windows = (await window_list()) as list[dict];
+        } except Exception as e {
+            windows = [];
+        }
+        try {
+            r = (await scope_count(env, date_from, date_to)) as dict;
+            scope_n = r.get("n");
+        } except Exception as e2 {
+            scope_n = None;
+        }
+    }
 
     def go(pg: str) {
         active_page = pg;
@@ -111,6 +130,32 @@ def:pub AppShell(on_logout: Callable[[], None]) -> JsxElement {
     def on_range(f: str, t: str) {
         date_from = f;
         date_to = t;
+        preset = "custom";
+    }
+    def on_preset(v: str) {
+        preset = v;
+        if v == "today" {
+            date_from = iso_days_ago(0);
+            date_to = iso_tomorrow();
+        } elif v == "7d" {
+            date_from = iso_days_ago(7);
+            date_to = iso_tomorrow();
+        } elif v == "30d" {
+            date_from = iso_days_ago(30);
+            date_to = iso_tomorrow();
+        } elif v == "90d" {
+            date_from = iso_days_ago(90);
+            date_to = iso_tomorrow();
+        } elif v.startswith("win:") {
+            nm = v[4:];
+            for w in windows {
+                wd = w as dict;
+                if str(wd.get("name", "")) == nm {
+                    date_from = str(wd.get("from_dt", ""));
+                    date_to = str(wd.get("to_dt", ""));
+                }
+            }
+        }
     }
     def on_restore(pg: str, e: str, f: str, t: str) {
         active_page = pg;
@@ -127,6 +172,16 @@ def:pub AppShell(on_logout: Callable[[], None]) -> JsxElement {
     }
 
     page_title = str(PAGE_TITLES[active_page]);
+    scope_txt = "counting events in scope…";
+    if scope_n is not None {
+        scope_txt = fmt_num(scope_n) + " events in scope";
+    }
+    win_opts: list[dict] = [];
+    for w in windows {
+        wd = w as dict;
+        nm = str(wd.get("name", ""));
+        win_opts = win_opts + [{"v": "win:" + nm, "label": "🪟 " + nm}];
+    }
 
     return <TooltipProvider>
         <SidebarProvider>
@@ -162,6 +217,7 @@ def:pub AppShell(on_logout: Callable[[], None]) -> JsxElement {
             </Sidebar>
 
             <SidebarInset>
+                <div className="sticky top-0 z-30 bg-background">
                 <header className="flex flex-col gap-3 border-b border-border px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-2">
                         <SidebarTrigger />
@@ -175,7 +231,7 @@ def:pub AppShell(on_logout: Callable[[], None]) -> JsxElement {
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                         <Select value={env} onValueChange={on_env}>
-                            <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 <SelectGroup>
                                     <SelectItem value="prod">Production</SelectItem>
@@ -185,13 +241,30 @@ def:pub AppShell(on_logout: Callable[[], None]) -> JsxElement {
                                 </SelectGroup>
                             </SelectContent>
                         </Select>
+                        <Select value={preset} onValueChange={on_preset}>
+                            <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectGroup>
+                                    <SelectItem value="today">Today</SelectItem>
+                                    <SelectItem value="7d">Last 7 days</SelectItem>
+                                    <SelectItem value="30d">Last 30 days</SelectItem>
+                                    <SelectItem value="90d">Last 90 days</SelectItem>
+                                    <SelectItem value="custom">Custom range</SelectItem>
+                                    {for (wi, wo) in enumerate(win_opts) {
+                                        <SelectItem key={"w" + str(wi)} value={str(wo["v"])}>{str(wo["label"])}</SelectItem>
+                                    }}
+                                </SelectGroup>
+                            </SelectContent>
+                        </Select>
                         <DateRangePicker date_from={date_from} date_to={date_to} on_change={on_range} />
                         <Button variant="outline" onClick={on_refresh}>Refresh</Button>
                     </div>
                 </header>
 
-                <div className="border-b border-border bg-muted/30 px-6 py-2 text-[11px] text-muted-foreground">
-                    KPIs & trends follow the selected range (auto daily / weekly / monthly buckets) · cohorts (retention, lifecycle) use their own windows · env = {env} · prod is $host-allowlisted (super-property not emitted by prod yet).
+                <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/30 px-6 py-2 text-[11px] text-muted-foreground">
+                    <span className="font-medium text-foreground">{scope_txt}</span>
+                    <span>· env = {env} · range follows the picker (auto buckets) · cohorts keep their own windows · prod = $host allowlist.</span>
+                </div>
                 </div>
 
                 <div className="flex items-center gap-2 border-b border-border px-6 py-2">

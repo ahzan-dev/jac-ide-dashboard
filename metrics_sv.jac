@@ -807,6 +807,25 @@ async def:priv metric(key: str, env: str, date_from: str, date_to: str, refresh:
     return await _run_metric(m, out, env, range_days, date_from, date_to, bkt, ck);
 }
 
+# Live "N events in scope" for the sticky filter bar — makes the active
+# env + range slice tangible (redesign plan P3).
+async def:priv scope_count(env: str, date_from: str, date_to: str) -> dict {
+    env = _clamp_env(env);
+    df = _parse_dt(date_from);
+    dt_ = _parse_dt(date_to);
+    if (df is None) or (dt_ is None) {
+        return {"n": None};
+    }
+    sql = ("SELECT count() FROM events WHERE true " + env_filter(env)
+        + " AND timestamp >= toDateTime('" + _norm_dt(df) + "')"
+        + " AND timestamp < toDateTime('" + _norm_dt(dt_) + "')");
+    res = await asyncio.to_thread(run_hogql, sql);
+    if "error" in res {
+        return {"n": None};
+    }
+    return {"n": _scalar(res["results"] as list)};
+}
+
 # One page fetches ALL its tiles in a single request; queries run concurrently server-side
 # (asyncio.gather over threads) so jac-serve's per-request serialization is bypassed.
 async def:priv metrics_batch(keys: list, env: str, date_from: str, date_to: str, refresh: bool) -> dict {
