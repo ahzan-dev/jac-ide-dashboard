@@ -128,6 +128,14 @@ container; follow the `dataviz` skill. Read `jac-shadcn`/`-blocks`/`-components`
 - **HogQL env-filter injection + `BETWEEN`**: `timestamp BETWEEN a AND b {env_filter}` becomes
   `BETWEEN a AND b AND (...)` → ClickHouse mis-binds the `AND` → http 400. Use explicit `timestamp >= a AND
   timestamp < b {env_filter}` in any query the env filter is appended to.
+- **Inline `{if cond { "string" } else { "string" }}` in JSX (e.g. a button label) is a PARSE error at
+  `jac start` — and `jac check` passes it.** Precompute the label string in the component body.
+- **First-assignment-inside-a-branch = TDZ crash.** `if x { align = "a"; } else { align = "b"; }` compiles
+  each branch to a block-scoped `let align` → later reads throw `ReferenceError`. Assign a default BEFORE
+  branching, then override in the branches. (Bit TableTile 2026-07-27.)
+- **`TableTile` renders text cells as-is** (`_numlike` check): only numeric-looking values go through
+  `fmt_num`/`pct1`; emails/models/ids/plans pass through, left-aligned. Before 2026-07-27 every non-first
+  column was force-formatted → NaN for text, 0 for "". Don't reintroduce blanket numeric formatting.
 
 ## Performance (why the batch endpoint exists)
 - **jac-serve (0.16.7) serializes concurrent requests** — 6 parallel `/function/metric` calls took ~6× a

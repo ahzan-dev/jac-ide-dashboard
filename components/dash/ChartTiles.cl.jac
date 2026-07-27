@@ -255,7 +255,39 @@ def _hdr(col: str) -> str {
     c = col.replace("_pct", " %").replace("_", " ");
     return c;
 }
+# Numeric-looking = optional leading '-', digits, at most one '.'. Anything else
+# (emails, models, plans, ids, dates) must render as-is — fmt_num on text is NaN.
+def _numlike(v: any) -> bool {
+    s = str(v);
+    if s == "" {
+        return False;
+    }
+    digits = "0123456789";
+    has_digit = False;
+    dots = 0;
+    i = 0;
+    for ch in s {
+        if ch in digits {
+            has_digit = True;
+        } elif ch == "-" and i == 0 {
+            has_digit = has_digit;
+        } elif ch == "." and dots == 0 {
+            dots = 1;
+        } else {
+            return False;
+        }
+        i = i + 1;
+    }
+    return has_digit;
+}
+
 def _cell(v: any, col: str) -> str {
+    if v is None {
+        return fmt_num(v);
+    }
+    if not _numlike(v) {
+        return str(v);
+    }
     if col.endswith("pct") or ("%" in col) {
         return pct1(v);
     }
@@ -278,7 +310,14 @@ def:pub TableTile(title: str, data: any, loading: bool) -> JsxElement {
         i = 0;
         for cell in r {
             val = str(cell) if i == 0 else _cell(cell, str(cols[i]));
-            align = "font-medium" if i == 0 else "text-right tabular-nums";
+            # assign before branching — a first assignment inside if/elif compiles
+            # to a block-scoped `let` in jac2js and the later read throws.
+            align = "text-right tabular-nums";
+            if i == 0 {
+                align = "font-medium";
+            } elif (cell is not None) and (not _numlike(cell)) {
+                align = "";
+            }
             cells = cells + [{"k": str(i), "v": val, "a": align}];
             i = i + 1;
         }
