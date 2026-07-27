@@ -22,7 +22,7 @@ _Source: server-metered `ai_generation_metered` (real litellm dollars, not estim
 | 11 | noriaki@uni.minerva.edu | Noriaki Kishida | 4 | 8.10 | 2.3% |  | claude-sonnet-4-6 |
 | 12 | owin@owinrojas.com | Owin Rojas | 3 | 7.58 | 2.2% |  | claude-opus-4-6 |
 | 13 | umangshankar10@gmail.com | Umang3211 | 2 | 7.43 | 2.1% |  | claude-sonnet-4-6 |
-| 14 | stepodkelly@gmail.com | Stephen Kelly | 1 | 7.38 | 2.1% |  | (blank) |
+| 14 | stepodkelly@gmail.com | Stephen Kelly | 1 | 7.38 | 2.1% |  | claude-sonnet-4-6 |
 | 15 | amyhsieh3730@gmail.com | amyxhsieh | 2 | 7.00 | 2.0% |  | claude-sonnet-4-6 |
 | 16 | nagatarunmoturi@gmail.com | Tarun Moturi | 16 | 6.70 | 1.9% |  | claude-sonnet-4-6 |
 | 17 | clai74@mail.ccsf.edu | Chineseman Lai | 2 | 6.08 | 1.7% |  | claude-sonnet-4-6 |
@@ -58,19 +58,19 @@ _Source: server-metered `ai_generation_metered` (real litellm dollars, not estim
 
 | Model | Runs | Users | Total $ | Avg $/run |
 |---|---|---|---|---|
-| claude-sonnet-4-6 | 172 | 39 | 198.17 | 1.152 |
-| claude-opus-4-6 | 38 | 6 | 102.73 | 2.703 |
-| (blank) | 11 | 8 | 46.61 | 4.237 |
+| claude-sonnet-4-6 | 178 | 40 | 219.17 | 1.231 |
+| claude-opus-4-6 | 41 | 6 | 123.99 | 3.024 |
+| (blank) | 2 | 2 | 4.34 | 2.169 |
 | gpt-5.4 | 2 | 1 | 3.18 | 1.589 |
 | gpt-5.2 | 6 | 2 | 0.77 | 0.128 |
 | claude-opus-4-5-20251101 | 1 | 1 | 0.31 | 0.305 |
 
 ## Notes a reader must know
 
-- **'(blank)' model rows are real spend** — $46.61 across 11 runs (8 users) arrived with the model property missing (instrumentation gap, since flagged). The dollars are correct; only the model attribution is missing.
+- **Model attribution note:** 11 runs originally arrived with the model label lost (a long-turn worker-handoff bug in the product backend — filed with full proof as [jacBuilder #944](https://github.com/jaseci-labs/jacBuilder/issues/944)). **9 of them ($42.27) are attributed here** via the same turn's client-side completion event; 2 aborted runs ($4.34) are unrecoverable and shown as '(blank)'. Rows carry a 'model source' flag in the spreadsheet.
 - **BYOK:** 1 run(s), $0.31, by likhith11ramesh@gmail.com — billed to the user's own API key, not the platform. Every other run is platform-paid.
 - Users shown as `anon:<id>` never signed in and have no email or display name on record.
 - Concentration: the top 5 spenders account for 53% of total cost.
 
 ---
-_Validated three ways: raw per-turn reconciliation to the cent; independently rebuilt by the JacHammer Analytics Report Studio with matching numbers; re-verified under the hardened jachammer.ai-only production filter (zero contamination). Generated 2026-07-27 16:30 UTC._
+_Validated three ways: raw per-turn reconciliation to the cent; independently rebuilt by the JacHammer Analytics Report Studio with matching numbers; re-verified under the hardened jachammer.ai-only production filter (zero contamination). Generated 2026-07-27 16:41 UTC._
