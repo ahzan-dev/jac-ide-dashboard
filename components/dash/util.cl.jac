@@ -44,8 +44,41 @@ def:pub utc_to_local_input(s: str) -> str {
     return utc_to_local(s).replace(" ", "T");
 }
 
-# The viewer's IANA timezone name (e.g. "Asia/Colombo") for honest labeling.
+# Display timezone: user-selectable (persisted), defaulting to the device zone.
+# NOTE: the tz selector affects DISPLAY formatting (labels, axes, windows);
+# the datetime pickers always use the device zone (native input limitation).
+glob TZ_KEY: str = "jachammer_tz";
+
+def:pub tz_display() -> str {
+    try {
+        v = localStorage.getItem(TZ_KEY);
+        if v {
+            return v as str;
+        }
+    } except Exception {
+        return "";
+    }
+    return "";
+}
+
+def:pub tz_set(v: str) {
+    try {
+        if v == "" {
+            localStorage.removeItem(TZ_KEY);
+        } else {
+            localStorage.setItem(TZ_KEY, v);
+        }
+    } except Exception {
+        return;
+    }
+}
+
+# The viewer's effective display timezone name for honest labeling.
 def:pub tz_name() -> str {
+    o = tz_display();
+    if o != "" {
+        return o;
+    }
     try {
         return str(new(Intl.DateTimeFormat).resolvedOptions().timeZone);
     } except Exception {
@@ -53,16 +86,90 @@ def:pub tz_name() -> str {
     }
 }
 
-# Axis tick: "2026-05-17" -> "05-17". Named (inline lambda tickFormatters miscompile in jac2js).
+def _dt_of(s: str) -> any {
+    ss = s.strip();
+    if len(ss) == 10 {
+        ss = ss + " 00:00:00";
+    }
+    return new(Date, ss[0:16].replace(" ", "T") + ":00Z");
+}
+
+# "YYYY-MM-DD HH:MM[:SS]" UTC -> "Jul 26, 10:30 PM" in the display tz.
+def:pub human_dt(s: str) -> str {
+    if len(s.strip()) < 10 {
+        return s;
+    }
+    d = _dt_of(s);
+    opts = {"month": "short", "day": "numeric", "hour": "numeric", "minute": "2-digit"};
+    t = tz_display();
+    if t != "" {
+        opts["timeZone"] = t;
+    }
+    try {
+        return str(d.toLocaleString("en-US", opts));
+    } except Exception {
+        return utc_to_local(s);
+    }
+}
+
+# time-of-day only: "10:30 PM"
+def:pub human_time(s: str) -> str {
+    d = _dt_of(s);
+    opts = {"hour": "numeric", "minute": "2-digit"};
+    t = tz_display();
+    if t != "" {
+        opts["timeZone"] = t;
+    }
+    try {
+        return str(d.toLocaleString("en-US", opts));
+    } except Exception {
+        return s;
+    }
+}
+
+def _looks_dt(s: str) -> bool {
+    return (len(s) >= 10) and (s[4:5] == "-") and (s[7:8] == "-");
+}
+
+# Server window label "YYYY-MM-DD HH:MM:SS → YYYY-MM-DD HH:MM:SS (7.5h)" ->
+# "Jul 26, 10:30 PM → Jul 27, 6:00 AM (7.5h)" in the display tz. Fixed labels
+# ("last 30 days", cohort windows) pass through untouched.
+def:pub human_window(w: str) -> str {
+    if " → " not in w {
+        return w;
+    }
+    parts = w.split(" → ");
+    if len(parts) != 2 {
+        return w;
+    }
+    left = str(parts[0]).strip();
+    right = str(parts[1]).strip();
+    tail = "";
+    if " (" in right {
+        i = right.find(" (");
+        tail = " " + right[i + 1:];
+        right = right[0:i];
+    }
+    if _looks_dt(left) and _looks_dt(right) {
+        return human_dt(left) + " → " + human_dt(right) + tail;
+    }
+    return w;
+}
+
+# Axis tick: daily/weekly buckets -> "05-17"; sub-day buckets (datetime values)
+# -> local clock time "10:30 PM" (a repeated "07-26 07-26 …" axis is useless).
+# Named (inline lambda tickFormatters miscompile in jac2js).
 def:pub short_date(v: any) -> str {
     s = str(v);
+    if len(s) >= 16 and (":" in s) { return human_time(s); }
     if len(s) >= 10 { return s[5:10]; }
     return s;
 }
 
-# Axis tick that shortens dates but leaves short values (e.g. hour numbers) as-is.
+# Axis tick that also leaves short values (e.g. hour numbers) as-is.
 def:pub axis_tick(v: any) -> str {
     s = str(v);
+    if len(s) >= 16 and (":" in s) { return human_time(s); }
     if len(s) >= 10 and ("-" in s) { return s[5:10]; }
     return s;
 }

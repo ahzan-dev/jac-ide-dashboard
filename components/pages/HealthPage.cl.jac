@@ -3,7 +3,7 @@ import from ..dash.util { cache_key, cache_get, cache_put, cacheable, inflight_s
 import from ..dash.StatTile { StatTile }
 import from ..dash.ChartTiles { LineTile, AreaTile, BarsTile, Banner, TableTile }
 
-glob HEALTH_KEYS: list = ["median_response", "preview_reliability", "exception_total", "exception_weekly", "latency_weekly", "deploy_success", "deploy_intent", "deploy_outcomes"];
+glob HEALTH_KEYS: list = ["median_response", "preview_reliability", "exception_total", "exception_weekly", "latency_weekly", "deploy_intent", "deploy_outcomes", "failure_rate"];
 
 def:pub HealthPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxElement {
     has data: dict = {};
@@ -43,11 +43,11 @@ def:pub HealthPage(env: str, date_from: str, date_to: str, refresh_n: int) -> Js
         <div className="col-span-12 lg:col-span-6"><AreaTile title="Website errors over time" data={data["exception_weekly"]} loading={loading} /></div>
         <div className="col-span-12 lg:col-span-6"><LineTile title="Response time over time" data={data["latency_weekly"]} loading={loading} /></div>
 
-        <div className="col-span-12 sm:col-span-6 lg:col-span-4"><StatTile title="Deploy success rate" data={data["deploy_success"]} loading={loading} /></div>
         <div className="col-span-12 lg:col-span-8"><BarsTile title="Deploy attempts (test vs live)" data={data["deploy_intent"]} loading={loading} /></div>
 
         <div className="col-span-12"><TableTile title="Deploy outcomes (sandbox vs production)" data={data["deploy_outcomes"]} loading={loading} /></div>
 
         <div className="col-span-12"><Banner text="The numbers on this page (AI response time, preview reliability, browser errors) are live and real. Server infrastructure health (server capacity, true uptime) isn't tracked here yet — it lives in a separate internal monitoring system." /></div>
+        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="AI failure rate" data={data["failure_rate"]} loading={loading} /></div>
     </div>;
 }

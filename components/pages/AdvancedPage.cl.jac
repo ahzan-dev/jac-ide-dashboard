@@ -5,7 +5,7 @@ import from ..dash.ChartTiles { AreaTile, BarsTile, FunnelTile, StackBarTile, Ba
 import from ..dash.HogqlBox { HogqlBox }
 import from ..dash.InsightsBox { InsightsBox }
 
-glob ADVANCED_KEYS: list = ["churn_risk", "ai_baseline", "ai_fail_reasons", "funnel", "lifecycle", "daily_ai"];
+glob ADVANCED_KEYS: list = ["churn_risk", "ai_baseline", "ai_fail_reasons", "lifecycle", "daily_ai", "revert_rate"];
 
 def:pub AdvancedPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxElement {
     has data: dict = {};
@@ -44,12 +44,12 @@ def:pub AdvancedPage(env: str, date_from: str, date_to: str, refresh_n: int) -> 
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Normal daily AI usage" data={data["ai_baseline"]} loading={loading} /></div>
 
         <div className="col-span-12 lg:col-span-8"><StackBarTile title="User lifecycle" data={data["lifecycle"]} loading={loading} /></div>
-        <div className="col-span-12 lg:col-span-4"><FunnelTile title="New-user journey" data={data["funnel"]} loading={loading} /></div>
 
         <div className="col-span-12 lg:col-span-6"><BarsTile title="Top failure reasons" data={data["ai_fail_reasons"]} loading={loading} /></div>
         <div className="col-span-12 lg:col-span-6"><AreaTile title="AI usage volume" data={data["daily_ai"]} loading={loading} /></div>
 
         <div className="col-span-12"><InsightsBox data={data} loading={loading} /></div>
         <div className="col-span-12"><HogqlBox /></div>
+        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Undo rate" data={data["revert_rate"]} loading={loading} /></div>
     </div>;
 }

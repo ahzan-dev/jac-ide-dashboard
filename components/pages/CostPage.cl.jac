@@ -4,7 +4,7 @@ import from ..dash.StatTile { StatTile }
 import from ..dash.ChartTiles { TableTile, AreaTile, BarsTile, StaticStat, Banner }
 import from ..dash.util { cache_key, cache_get, cache_put, cacheable, inflight_start, inflight_end }
 
-glob COST_KEYS: list = ["metered_rows", "total_spend", "cost_per_request", "cost_per_user", "model_mix", "ai_requests_weekly", "cost_by_model", "byok_split", "user_model_cost_matrix"];
+glob COST_KEYS: list = ["metered_rows", "total_spend", "cost_per_request", "cost_per_user", "ai_requests_weekly", "cost_by_model", "byok_split", "user_model_cost_matrix", "project_cost_rollup"];
 
 def:pub CostPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxElement {
     has data: dict = {};
@@ -76,15 +76,14 @@ def:pub CostPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxE
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Cost per active user" data={data["cost_per_user"]} loading={loading} /></div>
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StaticStat title="Profit margin (after AI costs)" value={margin_txt} note={margin_note} definition="How much of your subscription revenue is left after paying for AI usage costs." /></div>
 
-        <div className="col-span-12 lg:col-span-5"><BarsTile title="Which AI model people choose" data={data["model_mix"]} loading={loading} /></div>
         <div className="col-span-12 lg:col-span-4"><AreaTile title="AI usage (cost driver)" data={data["ai_requests_weekly"]} loading={loading} /></div>
         <div className="col-span-12 lg:col-span-3"><StaticStat title="Plan limits" value="Free · Builder · Pro" note="Each plan gets a monthly AI budget (Free $1.33, Builder $4, Pro $10), a project limit (3/5/10), and a deploy limit (0/1/3). Subscription prices are set in our billing system." definition="The usage caps built into each pricing plan; the prices customers pay are managed in our billing system." /></div>
 
         {#* Burn spec §4 — the cost of the bet. Revenue side is external (Stripe). *#}
-        <div className="col-span-12 lg:col-span-4"><StaticStat title="Cash runway" value="—" note="Not available yet — needs AI cost data plus your cash balance and subscription revenue to calculate how many months of cash you have left." definition="How many months your cash would last at the current pace of spending minus revenue." /></div>
         <div className="col-span-12 lg:col-span-8"><TableTile title="Cost per user × model (heaviest first)" data={data["user_model_cost_matrix"]} loading={loading} /></div>
 
         <div className="col-span-12 lg:col-span-7"><TableTile title="Cost by model" data={data["cost_by_model"]} loading={loading} /></div>
         <div className="col-span-12 lg:col-span-5"><TableTile title="BYOK vs platform keys" data={data["byok_split"]} loading={loading} /></div>
+        <div className="col-span-12"><TableTile title="Cost by project" data={data["project_cost_rollup"]} loading={loading} /></div>
     </div>;
 }

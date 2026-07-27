@@ -5,8 +5,8 @@ import from ..dash.ChartTiles { LineTile, BarsTile, VBarTile }
 
 glob REQUESTS_KEYS: list = [
     "ai_requests", "requests_per_active", "prompt_len", "median_response",
-    "requests_daily", "peak_hours", "gen_success_weekly", "ai_fail_reasons"
-];
+    "requests_daily", "peak_hours", "ai_fail_reasons"
+, "model_usage"];
 
 def:pub RequestsPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxElement {
     has data: dict = {};
@@ -46,8 +46,8 @@ def:pub RequestsPage(env: str, date_from: str, date_to: str, refresh_n: int) -> 
 
         <div className="col-span-12 lg:col-span-5"><VBarTile title="AI requests over time" data={data["requests_daily"]} loading={loading} /></div>
         <div className="col-span-12 sm:col-span-6 lg:col-span-4"><VBarTile title="Busiest hours of the day" data={data["peak_hours"]} loading={loading} /></div>
-        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><LineTile title="AI success rate over time" data={data["gen_success_weekly"]} loading={loading} /></div>
 
         <div className="col-span-12 lg:col-span-6"><BarsTile title="Top failure reasons" data={data["ai_fail_reasons"]} loading={loading} /></div>
+        <div className="col-span-12 lg:col-span-6"><BarsTile title="AI requests by model" data={data["model_usage"]} loading={loading} /></div>
     </div>;
 }
