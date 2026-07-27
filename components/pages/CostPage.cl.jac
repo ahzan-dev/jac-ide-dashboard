@@ -2,7 +2,7 @@ sv import from ...metrics_sv { metrics_batch }
 sv import from ...billing_sv { billing_summary }
 import from ..dash.StatTile { StatTile }
 import from ..dash.ChartTiles { TableTile, AreaTile, BarsTile, StaticStat, Banner }
-import from ..dash.util { cache_key, cache_get, cache_put, cacheable }
+import from ..dash.util { cache_key, cache_get, cache_put, cacheable, inflight_start, inflight_end }
 
 glob COST_KEYS: list = ["metered_rows", "total_spend", "cost_per_request", "cost_per_user", "model_mix", "ai_requests_weekly", "cost_by_model", "byok_split", "user_model_cost_matrix"];
 
@@ -24,7 +24,11 @@ def:pub CostPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxE
         }
         loading = True;
         keys = COST_KEYS;
+        if (not inflight_start(k)) and (not refresh) {
+            return;
+        }
         res = await metrics_batch(keys, env, date_from, date_to, refresh);
+        inflight_end(k);
         data = res as dict;
         bill = await billing_summary();
         billing = bill as dict;

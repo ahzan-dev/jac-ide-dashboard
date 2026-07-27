@@ -323,6 +323,22 @@ test "pivot rejects input without the expected columns" {
 }
 
 # ---------------------------------------------------------------------------
+# API protection: budget window + stale-cache freshness bookkeeping
+# ---------------------------------------------------------------------------
+test "query budget admits calls under the per-minute cap and records them" {
+    before = len(_Q_TIMES);
+    assert _acquire_budget() == True;
+    assert len(_Q_TIMES) == before + 1;
+}
+test "cache_put stamps a freshness horizon inside the payload" {
+    v = {"value": 1, "meta": {}};
+    _cache_put("test:freshness", v);
+    # even with no Redis (RDS None) the stamp must be present for stale math
+    assert "_fresh_until" in v;
+    assert (v["_fresh_until"] as float) > time.time();
+}
+
+# ---------------------------------------------------------------------------
 # R3: PII masking + markdown export (pure parts of sharing)
 # ---------------------------------------------------------------------------
 test "mask_obj masks email local-parts everywhere, leaves other text alone" {
