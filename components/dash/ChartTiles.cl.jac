@@ -10,6 +10,7 @@ import from "recharts" {
     PieChart, Pie, Cell
 }
 import from .util { fmt_num, pct1, short_date, axis_tick, delta_badge }
+import from .DataTable { DataTable }
 
 # dataviz validated categorical palette (fixed order, never cycled)
 glob VIZ: list = ["var(--viz-1)", "var(--viz-2)", "var(--viz-3)", "var(--viz-4)", "var(--viz-5)", "var(--viz-6)"];
@@ -251,106 +252,18 @@ def:pub VBarTile(title: str, data: any, loading: bool) -> JsxElement {
 }
 
 # ============================ Generic data table tile =====================
-def _hdr(col: str) -> str {
-    c = col.replace("_pct", " %").replace("_", " ");
-    return c;
-}
-# Numeric-looking = optional leading '-', digits, at most one '.'. Anything else
-# (emails, models, plans, ids, dates) must render as-is — fmt_num on text is NaN.
-def _numlike(v: any) -> bool {
-    s = str(v);
-    if s == "" {
-        return False;
-    }
-    digits = "0123456789";
-    has_digit = False;
-    dots = 0;
-    i = 0;
-    for ch in s {
-        if ch in digits {
-            has_digit = True;
-        } elif ch == "-" and i == 0 {
-            has_digit = has_digit;
-        } elif ch == "." and dots == 0 {
-            dots = 1;
-        } else {
-            return False;
-        }
-        i = i + 1;
-    }
-    return has_digit;
-}
-
-def _cell(v: any, col: str) -> str {
-    if v is None {
-        return fmt_num(v);
-    }
-    if not _numlike(v) {
-        return str(v);
-    }
-    if col.endswith("pct") or ("%" in col) {
-        return pct1(v);
-    }
-    return fmt_num(v);
-}
-
+# Thin wrapper: Frame chrome + DataTable (search / sort / pagination — see
+# components/dash/DataTable.cl.jac). Same API as always, so every table tile
+# (report tables, feature table, dynamic Ask tables) gets the features for free.
 def:pub TableTile(title: str, data: any, loading: bool) -> JsxElement {
     cols = (data["columns"] as list) if (data and (not loading)) else [];
     raw = (data["rows"] as list) if (data and (not loading)) else [];
-
-    # Precompute header + formatted cells in the body (plain Jac) — keep JSX slots trivial
-    # to avoid jac2js miscompiling enumerate + cross-indexing inside slots.
-    headers = [];
-    for c in cols {
-        headers = headers + [_hdr(str(c))];
-    }
-    frows = [];
-    for r in raw {
-        cells = [];
-        i = 0;
-        for cell in r {
-            val = str(cell) if i == 0 else _cell(cell, str(cols[i]));
-            # assign before branching — a first assignment inside if/elif compiles
-            # to a block-scoped `let` in jac2js and the later read throws.
-            align = "text-right tabular-nums";
-            if i == 0 {
-                align = "font-medium";
-            } elif (cell is not None) and (not _numlike(cell)) {
-                align = "";
-            }
-            cells = cells + [{"k": str(i), "v": val, "a": align}];
-            i = i + 1;
-        }
-        frows = frows + [{"k": str(r[0]), "cells": cells}];
-    }
 
     return <Frame title={title} data={data}>
         {if loading {
             <Skeleton className="h-40 w-full" />
         } else {
-            <div className="overflow-x-auto">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            {for h in headers {
-                                <TableHead key={h} className="text-xs">{h}</TableHead>
-                            }}
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {if len(frows) == 0 {
-                            <TableRow><TableCell className="text-xs text-muted-foreground">No data in this window.</TableCell></TableRow>
-                        }}
-                        {for fr in frows {
-                            <TableRow key={fr["k"]}>
-                                {for cc in fr["cells"] {
-                                    <TableCell key={cc["k"]} className={"text-xs " + cc["a"]}>{cc["v"]}</TableCell>
-                                }}
-                            </TableRow>
-                        }}
-                    </TableBody>
-                </Table>
-            </div>
+            <DataTable columns={cols} rows={raw} />
         }}
     </Frame>;
 }
