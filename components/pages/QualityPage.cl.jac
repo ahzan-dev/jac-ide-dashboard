@@ -5,7 +5,8 @@ import from ..dash.ChartTiles { LineTile, BarsTile, Banner }
 
 glob QUALITY_KEYS: list = [
     "failure_rate", "median_response", "revert_rate", "gen_success",
-    "rating_ratio", "gen_success_weekly", "revert_weekly", "ai_fail_reasons"
+    "rating_ratio", "gen_success_weekly", "revert_weekly", "ai_fail_reasons",
+    "first_try_success", "ai_edits", "model_usage", "model_latency"
 ];
 
 def:pub QualityPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxElement {
@@ -35,7 +36,7 @@ def:pub QualityPage(env: str, date_from: str, date_to: str, refresh_n: int) -> J
     }
 
     return <div className="grid grid-cols-12 gap-4">
-        <div className="col-span-12"><Banner text="Our biggest gap: we don't yet have a direct way for users to tell us if the AI's answer was good. Until that launches, everything below is inferred from behavior — failures, undos, and response time — not what users actually say." /></div>
+        <div className="col-span-12"><Banner text="Direct quality signals are now live: thumbs ratings, first-try success (via conversation threading), manual edits of AI output, and per-model latency/usage. Ratings are still low-volume — the behavioral proxies (failures, undos) remain the highest-signal numbers." /></div>
 
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="AI failure rate" data={data["failure_rate"]} loading={loading} /></div>
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Typical response time" data={data["median_response"]} loading={loading} /></div>
@@ -47,5 +48,10 @@ def:pub QualityPage(env: str, date_from: str, date_to: str, refresh_n: int) -> J
         <div className="col-span-12 lg:col-span-4"><BarsTile title="Top failure reasons" data={data["ai_fail_reasons"]} loading={loading} /></div>
 
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Helpful rate" data={data["rating_ratio"]} loading={loading} /></div>
+        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="First-try success" data={data["first_try_success"]} loading={loading} /></div>
+        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="AI outputs manually edited" data={data["ai_edits"]} loading={loading} /></div>
+
+        <div className="col-span-12 lg:col-span-6"><BarsTile title="AI requests by model" data={data["model_usage"]} loading={loading} /></div>
+        <div className="col-span-12 lg:col-span-6"><BarsTile title="Response time by model" data={data["model_latency"]} loading={loading} /></div>
     </div>;
 }

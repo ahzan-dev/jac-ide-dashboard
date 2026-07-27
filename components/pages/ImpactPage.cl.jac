@@ -3,7 +3,7 @@ import from ..dash.util { cache_key, cache_get, cache_put, cacheable }
 import from ..dash.StatTile { StatTile }
 import from ..dash.ChartTiles { LineTile, AreaTile, StaticStat, Banner }
 
-glob IMPACT_KEYS: list = ["kept_rate", "code_produced", "kept_weekly", "files_changed_weekly"];
+glob IMPACT_KEYS: list = ["kept_rate", "code_produced", "kept_weekly", "files_changed_weekly", "ai_edits", "session_depth"];
 
 def:pub ImpactPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxElement {
     has data: dict = {};
@@ -49,11 +49,12 @@ def:pub ImpactPage(env: str, date_from: str, date_to: str, refresh_n: int) -> Js
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Work kept (not undone)" data={data["kept_rate"]} loading={loading} /></div>
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Code produced" data={data["code_produced"]} loading={loading} /></div>
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StaticStat title="Estimated hours saved" value={hours_txt} note="An estimate, not a precise measurement — we assume each file the AI changed saves roughly 1.5 to 3 minutes of manual work." definition="A rough estimate of engineering hours saved, based on how many files the AI changed." /></div>
-        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StaticStat title="Estimated return on investment" value="—" note="Not available yet — calculating this needs revenue data we don't have connected." definition="The value delivered to the business compared to what it cost to deliver." /></div>
+        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Typical session length" data={data["session_depth"]} loading={loading} /></div>
 
         <div className="col-span-12 lg:col-span-6"><LineTile title="Work kept over time" data={data["kept_weekly"]} loading={loading} /></div>
         <div className="col-span-12 lg:col-span-6"><AreaTile title="Code produced over time" data={data["files_changed_weekly"]} loading={loading} /></div>
 
-        <div className="col-span-12"><Banner text="Being upfront about what's real: only 'work kept' (based on whether users undid changes) and 'files changed by AI' are actually measured. Hours-saved and return-on-investment are estimates — we'll measure them properly once we track real acceptance and connect revenue data." /></div>
+        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="AI outputs manually edited" data={data["ai_edits"]} loading={loading} /></div>
+        <div className="col-span-12 lg:col-span-9"><Banner text="What's measured vs estimated: work-kept, files-changed, session length (focused time), and manual edits of AI output are real measurements. Hours-saved remains an estimate (1.5–3 min per AI-changed file). ROI still needs revenue attribution and stays unshown rather than invented." /></div>
     </div>;
 }

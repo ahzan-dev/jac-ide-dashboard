@@ -1,9 +1,9 @@
 sv import from ...metrics_sv { metrics_batch }
 import from ..dash.util { cache_key, cache_get, cache_put, cacheable }
 import from ..dash.StatTile { StatTile }
-import from ..dash.ChartTiles { BarsTile, Banner }
+import from ..dash.ChartTiles { BarsTile, TableTile, Banner }
 
-glob FEEDBACK_KEYS: list = ["problem_areas", "issue_categories", "rating_ratio"];
+glob FEEDBACK_KEYS: list = ["problem_areas", "issue_categories", "rating_ratio", "issue_log", "ai_edits"];
 
 def:pub FeedbackPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxElement {
     has data: dict = {};
@@ -32,12 +32,14 @@ def:pub FeedbackPage(env: str, date_from: str, date_to: str, refresh_n: int) -> 
     }
 
     return <div className="grid grid-cols-12 gap-4">
-        <div className="col-span-12"><Banner text="We don't yet have a dedicated way for users to give feedback. What's below is inferred from behavior (failures and friction) plus a user-reported-issues feature that hasn't launched yet — it stays empty until it does. Customer satisfaction surveys, support tickets, and feature requests are tracked elsewhere, not here." /></div>
+        <div className="col-span-12"><Banner text="In-app feedback is live: thumbs ratings and the report-an-issue button both fire in production (low volume so far). The Issues & friction log below is the fullest picture — it counts every failure family, not just what users bothered to report. Surveys, support tickets, and feature requests are still tracked elsewhere." /></div>
 
         <div className="col-span-12 lg:col-span-6"><BarsTile title="Top problem areas (estimated)" data={data["problem_areas"]} loading={loading} /></div>
         <div className="col-span-12 lg:col-span-6"><BarsTile title="Reported issues by type" data={data["issue_categories"]} loading={loading} /></div>
 
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Helpful rate" data={data["rating_ratio"]} loading={loading} /></div>
-        <div className="col-span-12 lg:col-span-9"><Banner text="To build a real feedback picture we'd need: in-app satisfaction surveys, a support-ticket system, and a place to collect feature requests. None of these are connected yet. We'd rather show an honest 'we don't have this yet' than a made-up score." /></div>
+        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="AI outputs manually edited" data={data["ai_edits"]} loading={loading} /></div>
+
+        <div className="col-span-12"><TableTile title="Issues & friction log (all failure families)" data={data["issue_log"]} loading={loading} /></div>
     </div>;
 }
