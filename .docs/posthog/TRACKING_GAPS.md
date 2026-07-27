@@ -124,6 +124,20 @@
 - Expose to the Ask planner's schema doc: **Stripe MRR** (already in `billing_sv.jac`, so "revenue" stops
   mapping to cost) and PostHog **`$session_id`** (a rough session-length proxy until A-4 ships).
 
+### D-18 · `(blank)` model on `ai_generation_metered` — long-turn worker handoff wipes it — **HIGH (cost attribution)**
+- Root cause (jac-ide `services/jaccoder_client.jac`): the relay worker captures `model`/`byok` ONCE at
+  start from Redis `bridge:run:{key}`, but the drain loop's **TTL-refresh rewrites that hash WITHOUT
+  those fields**. A worker that (re)starts MID-turn (lease handoff / pod restart) captures the
+  already-wiped hash → the cost event lands with `model=""`. The up-front-capture patch fixed re-reads
+  within one worker, not takeovers.
+- Evidence: hackathon blanks ($46.61 / 11 runs) are overwhelmingly LONG turns (516s, 887s, 1288s,
+  1655s…) — exactly the ones that outlive a lease; and the client `ai_message_completed` for the SAME
+  turns carries the real model (opus-4-6 on the $10+ runs), proving only the server capture lost it.
+- Fix: refresh the TTL with `EXPIRE` (don't rewrite the hash), or re-write the full payload; belt+braces:
+  at record time, if `_worker_model` is empty, fall back to the turn's persisted JacCoderMessage model.
+- Dashboard workaround available: back-attribute blanks by joining to the nearest
+  `ai_message_completed` (same person, ±3 min) — recovers most of the blank dollars.
+
 ### D-17 · `is_new_user` on `auth_succeeded` is false right after signup — **HIGH (correctness)**
 - Found 2026-07-27 while auditing the hackathon report: all 79 `auth_succeeded` events in the hackathon
   window carry `is_new_user=false`, yet 71 of those 76 users had fired `auth_signup_succeeded` minutes
