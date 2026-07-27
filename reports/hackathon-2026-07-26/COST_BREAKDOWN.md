@@ -73,4 +73,4 @@ _Source: server-metered `ai_generation_metered` (real litellm dollars, not estim
 - Concentration: the top 5 spenders account for 53% of total cost.
 
 ---
-_Validated three ways: raw per-turn reconciliation to the cent; independently rebuilt by the JacHammer Analytics Report Studio with matching numbers; re-verified under the hardened jachammer.ai-only production filter (zero contamination). Generated 2026-07-27 16:26 UTC._
+_Validated three ways: raw per-turn reconciliation to the cent; independently rebuilt by the JacHammer Analytics Report Studio with matching numbers; re-verified under the hardened jachammer.ai-only production filter (zero contamination). Generated 2026-07-27 16:30 UTC._
