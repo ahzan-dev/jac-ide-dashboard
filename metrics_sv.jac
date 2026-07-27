@@ -15,6 +15,7 @@ Shapes: scalar (value + optional spark series) · series (line/bar) · rows (hba
 import os;
 import re;
 import json;
+import secrets;
 import asyncio;
 import traceback;
 import requests;
@@ -1546,6 +1547,8 @@ node Report {
     has snapshot: dict = {};        # section id -> frozen {title, chart, data}
     has built_at: str = "";
     has created_at: str = "";
+    has share_token: str = "";      # "" = private; else the public copy's token (R3)
+    has share_masked: bool = True;  # emails masked on the public copy
 }
 
 node NamedWindow {
@@ -1615,7 +1618,8 @@ def _report_template(template: str) -> list {
 def _report_meta(r: Report) -> dict {
     return {"id": jid(r), "title": r.title, "from_dt": r.from_dt, "to_dt": r.to_dt,
             "env": r.env, "mode": r.mode, "template": r.template,
-            "sections_count": len(r.sections), "built_at": r.built_at, "created_at": r.created_at};
+            "sections_count": len(r.sections), "built_at": r.built_at, "created_at": r.created_at,
+            "share_token": r.share_token, "share_masked": r.share_masked};
 }
 
 def:priv report_create(title: str, from_dt: str, to_dt: str, env: str, template: str) -> dict {
@@ -2001,6 +2005,197 @@ def:priv report_from_thread(thread_id: str, title: str, env: str, from_dt: str, 
         }
     }
     return {"id": "", "error": "thread not found"};
+}
+
+# ---- R3: public sharing — a FROZEN copy on the root.shared commons -----------
+# Security invariants (spec §8): the public endpoint serves stored snapshot JSON
+# only — it never executes SQL and never touches the owner's root. A leaked
+# token exposes exactly one frozen document. Emails masked by default.
+
+node SharedReport {
+    has token: str = "";
+    has data: dict = {};    # frozen {title, window, env, built_at, masked, sections, snapshot}
+}
+
+def _mask_str(s: str) -> str {
+    return re.sub(r"([A-Za-z0-9._%+-])[A-Za-z0-9._%+-]*@([A-Za-z0-9.-]+)", r"\1***@\2", s);
+}
+
+# Recursively mask email local-parts everywhere in the payload (rows, who-lists,
+# AI prose — the findings can cite emails too).
+def _mask_obj(o: any) -> any {
+    if isinstance(o, str) {
+        return _mask_str(o);
+    }
+    if isinstance(o, list) {
+        out: list = [];
+        for x in (o as list) {
+            out = out + [_mask_obj(x)];
+        }
+        return out;
+    }
+    if isinstance(o, dict) {
+        od = o as dict;
+        out2 = {};
+        for k in od.keys() {
+            out2[k] = _mask_obj(od[k]);
+        }
+        return out2;
+    }
+    return o;
+}
+
+def _shared_payload(r: Report, masked: bool) -> dict {
+    p = {"title": r.title, "from_dt": r.from_dt, "to_dt": r.to_dt, "env": r.env,
+         "built_at": r.built_at, "masked": masked,
+         "sections": r.sections, "snapshot": r.snapshot};
+    if masked {
+        return _mask_obj(p) as dict;
+    }
+    return p;
+}
+
+def _publish_shared(r: Report, masked: bool) -> str {
+    tok = r.share_token if r.share_token else secrets.token_urlsafe(24);
+    payload = _shared_payload(r, masked);
+    found = False;
+    for s in [root.shared -->][?:SharedReport] {
+        if s.token == tok {
+            s.data = payload;
+            found = True;
+        }
+    }
+    if not found {
+        sn = SharedReport(token=tok, data=payload);
+        root.shared ++> sn;
+        grant(sn, level=ReadPerm);
+    }
+    r.share_token = tok;
+    r.share_masked = masked;
+    return tok;
+}
+
+def:priv report_share(report_id: str, masked: bool) -> dict {
+    for r in [root -->][?:Report] {
+        if jid(r) == report_id {
+            if not r.snapshot {
+                return {"token": "", "error": "build the report before sharing"};
+            }
+            tok = _publish_shared(r, masked);
+            return {"token": tok, "error": ""};
+        }
+    }
+    return {"token": "", "error": "report not found"};
+}
+
+def:priv report_unshare(report_id: str) -> dict {
+    for r in [root -->][?:Report] {
+        if jid(r) == report_id {
+            tok = r.share_token;
+            victims: list = [];
+            for s in [root.shared -->][?:SharedReport] {
+                if s.token == tok {
+                    victims = victims + [s];
+                }
+            }
+            for v in victims {
+                del v;
+            }
+            r.share_token = "";
+            return {"token": "", "error": ""};
+        }
+    }
+    return {"token": "", "error": "report not found"};
+}
+
+# PUBLIC: anonymous read of one shared frozen document by token.
+def:pub report_public(token: str) -> dict {
+    t = token.strip();
+    if not t {
+        return {"found": False, "report": {}};
+    }
+    for s in [root.shared -->][?:SharedReport] {
+        if s.token == t {
+            return {"found": True, "report": s.data};
+        }
+    }
+    return {"found": False, "report": {}};
+}
+
+# ---- R3: Markdown export ----------------------------------------------------
+
+def _md_table(cols: list, rows: list) -> str {
+    heads: list = [];
+    for c in cols {
+        heads = heads + [str(c)];
+    }
+    dashes: list = [];
+    for h in heads {
+        dashes = dashes + ["---"];
+    }
+    lines = ["| " + " | ".join(heads) + " |",
+             "|" + "|".join(dashes) + "|"];
+    n = 0;
+    for r in rows {
+        if n >= 300 {
+            lines = lines + ["| … " + str(len(rows) - 300) + " more rows … |"];
+            break;
+        }
+        cells: list = [];
+        for cell in (r as list) {
+            cells = cells + ["" if cell is None else str(cell)];
+        }
+        lines = lines + ["| " + " | ".join(cells) + " |"];
+        n = n + 1;
+    }
+    return "\n".join(lines);
+}
+
+def _report_markdown(r: Report) -> str {
+    parts = ["# " + r.title, "",
+             "**Window:** " + r.from_dt + " → " + r.to_dt + " UTC · **Env:** " + r.env
+             + (" · built " + r.built_at + " UTC" if r.built_at else ""), ""];
+    for s in r.sections {
+        sd = s as dict;
+        typ = str(sd.get("type", ""));
+        ttl = str(sd.get("title", ""));
+        if typ == "header" {
+            parts = parts + ["## " + ttl, ""];
+            continue;
+        }
+        if typ == "text" {
+            parts = parts + ["### " + ttl, "", str(sd.get("md", "")), ""];
+            continue;
+        }
+        snap = r.snapshot.get(str(sd.get("id", "")), {}) as dict;
+        data = snap.get("data", {}) as dict;
+        v = data.get("value");
+        if v is not None {
+            line = "**" + ttl + ":** " + str(v);
+            d = data.get("delta");
+            if d is not None {
+                line = line + " (" + str(round(d as float)) + "% vs previous window)";
+            }
+            parts = parts + [line, ""];
+        } else {
+            cols = data.get("columns", []) as list;
+            rows = data.get("rows", []) as list;
+            if rows {
+                parts = parts + ["### " + ttl, "", _md_table(cols, rows), ""];
+            }
+        }
+    }
+    parts = parts + ["---", "_Generated by JacHammer Analytics — env-filtered, snapshot-frozen._"];
+    return "\n".join(parts);
+}
+
+def:priv report_export_md(report_id: str) -> dict {
+    for r in [root -->][?:Report] {
+        if jid(r) == report_id {
+            return {"md": _report_markdown(r), "title": r.title, "error": ""};
+        }
+    }
+    return {"md": "", "title": "", "error": "report not found"};
 }
 
 # ---- named windows (G9) — "during the hackathon" as a first-class range ------

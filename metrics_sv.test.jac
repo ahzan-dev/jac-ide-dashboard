@@ -322,6 +322,28 @@ test "pivot rejects input without the expected columns" {
     assert "error" in r;
 }
 
+# ---------------------------------------------------------------------------
+# R3: PII masking + markdown export (pure parts of sharing)
+# ---------------------------------------------------------------------------
+test "mask_obj masks email local-parts everywhere, leaves other text alone" {
+    o = {"sections": [{"md": "Top spender justin-kang@berkeley.edu at $95.21"}],
+         "snapshot": {"a": {"data": {"rows": [["x@y.com", 5, "claude-sonnet-4-6"]]}}}};
+    m = _mask_obj(o) as dict;
+    md = str(((m["sections"] as list)[0] as dict)["md"]);
+    assert "j***@berkeley.edu" in md;
+    assert "justin-kang@" not in md;
+    row = ((((m["snapshot"] as dict)["a"] as dict)["data"] as dict)["rows"] as list)[0] as list;
+    assert row[0] == "x***@y.com";
+    assert row[1] == 5;
+    assert row[2] == "claude-sonnet-4-6";
+}
+test "md_table renders columns, rows, and None as empty" {
+    t = _md_table(["user", "n"], [["a@b.com", 3], ["c", None]]);
+    assert "| user | n |" in t;
+    assert "| a@b.com | 3 |" in t;
+    assert "| c |  |" in t;
+}
+
 test "report_checks flags a per-turn sum that misses the total" {
     r = Report(sections=[
         {"id": "a", "type": "tile", "title": "t", "md": "", "recipe": {"kind": "metric", "ref": "total_spend"}},

@@ -7,7 +7,8 @@
 # component BODIES (SectionBlock) or precomputed dicts, never inside a for-slot.
 sv import from ...metrics_sv {
     report_list, report_create, report_get, report_build, report_delete,
-    report_generate, window_list, window_add
+    report_generate, report_share, report_unshare, report_export_md,
+    window_list, window_add
 }
 import from ..dash.DynamicTile { DynamicTile }
 import from ..ui.card { Card, CardHeader, CardTitle, CardDescription, CardContent }
@@ -46,8 +47,9 @@ def WindowChip(w: dict, on_pick: Callable[[str, str], None]) -> JsxElement {
 }
 
 # One report section. All type-branching lives HERE (component body), so the
-# page's for-loop slot stays a single trivial element.
-def SectionBlock(fr: dict) -> JsxElement {
+# page's for-loop slot stays a single trivial element. :pub — PublicReport
+# renders shared snapshots with the exact same blocks.
+def:pub SectionBlock(fr: dict) -> JsxElement {
     typ = str(fr["type"]);
     title = str(fr["title"]);
     if typ == "header" {
@@ -91,6 +93,7 @@ def:pub ReportsPage(env: str, date_from: str, date_to: str, refresh_n: int) -> J
     has f_wname: str = "";
     has generating: bool = False;
     has gen_error: str = "";
+    has sharing: bool = False;
 
     async def load_list() {
         loading = True;
@@ -142,6 +145,38 @@ def:pub ReportsPage(env: str, date_from: str, date_to: str, refresh_n: int) -> J
             gen_error = str(res.get("reason", "generation failed"));
         }
         generating = False;
+    }
+    # Share = publish a frozen (email-masked) copy to the public commons.
+    async def share(e: MouseEvent) {
+        if (not active_id) or sharing {
+            return;
+        }
+        sharing = True;
+        tok = str(active.get("share_token", ""));
+        if tok == "" {
+            await report_share(active_id, True);
+        } else {
+            await report_unshare(active_id);
+        }
+        active = (await report_get(active_id)) as dict;
+        sharing = False;
+    }
+    async def export_md(e: MouseEvent) {
+        if not active_id {
+            return;
+        }
+        res = (await report_export_md(active_id)) as dict;
+        md = str(res.get("md", ""));
+        if md == "" {
+            return;
+        }
+        blob = new(Blob, [md], {"type": "text/markdown"});
+        url = URL.createObjectURL(blob);
+        a = document.createElement("a");
+        a.href = url;
+        a.download = str(res.get("title", "report")).replace(" ", "_") + ".md";
+        a.click();
+        URL.revokeObjectURL(url);
     }
     def back(e: MouseEvent) {
         active_id = "";
@@ -270,6 +305,15 @@ def:pub ReportsPage(env: str, date_from: str, date_to: str, refresh_n: int) -> J
     create_btn_label = "Creating…" if creating else "Create & build";
     rebuild_btn_label = "Building…" if building else "Rebuild";
     gen_btn_label = "Generating…" if generating else "✨ Generate insights";
+    active_token = str(active.get("share_token", ""));
+    share_btn_label = "Unshare" if active_token != "" else "🔗 Share";
+    if sharing {
+        share_btn_label = "…";
+    }
+    share_url = "";
+    if active_token != "" {
+        share_url = str(window.location.origin) + "/report/" + active_token;
+    }
 
     return <div className="flex flex-col gap-4">
         {if active_id == "" {
@@ -386,11 +430,19 @@ def:pub ReportsPage(env: str, date_from: str, date_to: str, refresh_n: int) -> J
                         <Button variant="ghost" size="sm" onClick={back}>← All reports</Button>
                         <Button variant="outline" size="sm" onClick={rebuild} disabled={building}>{rebuild_btn_label}</Button>
                         <Button variant="outline" size="sm" onClick={gen_ai} disabled={generating}>{gen_btn_label}</Button>
+                        <Button variant="outline" size="sm" onClick={share} disabled={sharing}>{share_btn_label}</Button>
+                        <Button variant="outline" size="sm" onClick={export_md}>⬇ Export .md</Button>
                         <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive" onClick={remove}>Delete</Button>
                     </div>
                 </div>
                 {if gen_error != "" {
                     <p className="text-xs text-destructive">AI insights: {gen_error}</p>
+                }}
+                {if share_url != "" {
+                    <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
+                        <span className="text-[11px] font-medium">Public link (emails masked, snapshot only):</span>
+                        <Input readOnly className="h-7 max-w-md flex-1 text-xs" value={share_url} />
+                    </div>
                 }}
 
                 {if len(failed_checks) > 0 {
