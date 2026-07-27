@@ -54,7 +54,7 @@ tables at the bottom; every entity cell clickable (users now; projects next).
 - Range presets: Today · 7d · 30d · 90d · custom · named windows.
 - Every tile keeps its per-tile window label (honesty), but page headers state the active scope once.
 
-## P4 — More elements & drill-downs
+## P4 — More elements & drill-downs  *(status 2026-07-27: Project 360 + minute-precision picker SHIPPED; comparison bars / annotations / histograms / movers + User-360 full page remain)*
 
 - **Project 360**: clickable `project_id` cells → project panel (owner, runs, cost, models, deploy
   history). Same pattern as User 360.
