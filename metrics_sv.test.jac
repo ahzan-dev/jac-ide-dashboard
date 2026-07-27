@@ -188,3 +188,111 @@ test "QueryPlan defaults are safe (clarify-mode, good_up True, table chart)" {
     assert p.keys == [];
     assert p.sql == "";
 }
+
+# ---------------------------------------------------------------------------
+# R1: datetime windows — _parse_dt / _norm_dt / _bucket_span
+# ---------------------------------------------------------------------------
+test "parse_dt accepts date, datetime, and T-separator; rejects junk" {
+    assert _parse_dt("2026-07-26") is not None;
+    assert _parse_dt("2026-07-26 17:00") is not None;
+    assert _parse_dt("2026-07-26T17:00") is not None;
+    assert _parse_dt("2026-07-26 17:00:30") is not None;
+    assert _parse_dt("not-a-date") is None;
+    assert _parse_dt("2026-13-99") is None;
+}
+test "norm_dt canonicalizes to seconds precision for toDateTime()" {
+    d = _parse_dt("2026-07-26T17:00");
+    assert _norm_dt(d) == "2026-07-26 17:00:00";
+    d2 = _parse_dt("2026-07-26");
+    assert _norm_dt(d2) == "2026-07-26 00:00:00";
+}
+test "bucket_span picks sub-day buckets for short windows, keeps the old ladder" {
+    assert _bucket_span(7.5 * 3600) == "toStartOfFifteenMinutes";
+    assert _bucket_span(2 * 86400.0) == "toStartOfHour";
+    assert _bucket_span(30 * 86400.0) == "toDate";
+    assert _bucket_span(90 * 86400.0) == "toStartOfWeek";
+    assert _bucket_span(365 * 86400.0) == "toStartOfMonth";
+    # legacy day-based entry point unchanged for whole-day ranges
+    assert _bucket(30) == "toDate";
+    assert _bucket(200) == "toStartOfMonth";
+}
+
+# ---------------------------------------------------------------------------
+# R1: promoted drill-down metrics — registry contracts the report layer trusts
+# ---------------------------------------------------------------------------
+test "promoted drilldown metrics exist, are rows-shaped, and env-filtered" {
+    for k in ["user_rollup", "signups_detail", "cost_per_turn", "cost_by_model",
+              "project_cost_rollup", "byok_split", "upgrades_detail",
+              "deploy_outcomes", "issue_log", "project_sources"] {
+        m = METRICS[k];
+        assert m.shape == "rows", f"{k} not rows-shaped";
+        assert "{env_filter}" in m.sql, f"{k} missing env filter";
+        assert "{from}" in m.sql, f"{k} not window-driven";
+    }
+}
+test "drilldown tables route to the table tile, not hbars" {
+    assert _tile_for(METRICS["user_rollup"]) == "table";
+    assert _tile_for(METRICS["cost_per_turn"]) == "table";
+    assert _tile_for(METRICS["issue_log"]) == "table";
+}
+test "signups read the signup event, never logins (Max-AI lesson 1)" {
+    assert "auth_signup_succeeded" in METRICS["signups_detail"].sql;
+    assert "auth_succeeded'" not in METRICS["signups_detail"].sql.replace("auth_signup_succeeded", "");
+}
+test "project start method reads source, never template_id (Max-AI lesson 2)" {
+    assert "properties.source" in METRICS["project_sources"].sql;
+    assert "template_id" not in METRICS["project_sources"].sql;
+}
+
+# ---------------------------------------------------------------------------
+# R1: report templates — sections must reference real registry keys only
+# ---------------------------------------------------------------------------
+test "event-report template sections all resolve to registry keys" {
+    secs = _report_template("event-report");
+    assert len(secs) > 15;
+    for s in secs {
+        rec = s["recipe"] as dict;
+        if rec.get("kind") == "metric" {
+            assert str(rec["ref"]) in METRICS, f"template references unknown metric {rec['ref']}";
+        }
+    }
+}
+test "event-report template covers the hackathon report's core sections" {
+    secs = _report_template("event-report");
+    refs = [];
+    for s in secs {
+        rec = s["recipe"] as dict;
+        if rec.get("kind") {
+            refs = refs + [str(rec["ref"])];
+        }
+    }
+    for need in ["signups_detail", "user_rollup", "cost_by_model", "cost_per_turn",
+                 "byok_split", "deploy_outcomes", "upgrades_detail", "issue_log"] {
+        assert need in refs, f"template missing {need}";
+    }
+}
+test "unknown template falls back to a blank scaffold" {
+    secs = _report_template("blank");
+    assert len(secs) == 2;
+    assert secs[0]["type"] == "header";
+}
+
+# ---------------------------------------------------------------------------
+# R1: cost reconciliation check (Max-AI lesson 3 — no silent plug rows)
+# ---------------------------------------------------------------------------
+test "report_checks flags a per-turn sum that misses the total" {
+    r = Report(sections=[
+        {"id": "a", "type": "tile", "title": "t", "md": "", "recipe": {"kind": "metric", "ref": "total_spend"}},
+        {"id": "b", "type": "table", "title": "u", "md": "", "recipe": {"kind": "metric", "ref": "cost_per_turn"}}
+    ]);
+    r.snapshot = {
+        "a": {"data": {"value": 351.76}},
+        "b": {"data": {"columns": ["ts", "user", "model", "cost_usd"], "rows": [["x", "u", "m", 300.0], ["y", "v", "m", 21.76]]}}
+    };
+    checks = _report_checks(r);
+    assert len(checks) == 1;
+    assert checks[0]["ok"] == False;
+    r.snapshot["b"] = {"data": {"columns": ["ts", "user", "model", "cost_usd"], "rows": [["x", "u", "m", 300.0], ["y", "v", "m", 51.76]]}};
+    checks2 = _report_checks(r);
+    assert checks2[0]["ok"] == True;
+}

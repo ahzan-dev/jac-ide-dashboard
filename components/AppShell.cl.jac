@@ -9,6 +9,7 @@ import from .ui.badge { Badge }
 import from .ui.tooltip { TooltipProvider }
 import from .pages.AskPage { AskPage }
 import from .pages.PinnedPage { PinnedPage }
+import from .pages.ReportsPage { ReportsPage }
 import from .pages.OverviewPage { OverviewPage }
 import from .pages.UsersPage { UsersPage }
 import from .pages.RequestsPage { RequestsPage }
@@ -29,6 +30,7 @@ glob NAV: list = [
     {"group": "Dashboard", "items": [
         {"label": "Ask (AI builder)", "page": "ask", "dot": "✨"},
         {"label": "My Dashboard", "page": "pinned", "dot": "📌"},
+        {"label": "Reports", "page": "reports", "dot": "📄"},
         {"label": "Overview", "page": "overview", "dot": "🟢"}
     ]},
     {"group": "Product", "items": [
@@ -52,7 +54,7 @@ glob NAV: list = [
 ];
 
 glob PAGE_TITLES: dict = {
-    "ask": "Ask (AI builder)", "pinned": "My Dashboard",
+    "ask": "Ask (AI builder)", "pinned": "My Dashboard", "reports": "Reports",
     "overview": "Overview", "users": "Users & Adoption", "features": "Feature Usage",
     "feedback": "Feedback & Roadmap", "requests": "AI Requests", "quality": "AI Quality",
     "advanced": "Advanced Analytics", "impact": "Developer Impact", "cost": "Cost & Usage",
@@ -201,6 +203,8 @@ def:pub AppShell(on_logout: Callable[[], None]) -> JsxElement {
                         <AskPage env={env} date_from={date_from} date_to={date_to} refresh_n={refresh_n} />
                     } elif active_page == "pinned" {
                         <PinnedPage env={env} date_from={date_from} date_to={date_to} refresh_n={refresh_n} />
+                    } elif active_page == "reports" {
+                        <ReportsPage env={env} date_from={date_from} date_to={date_to} refresh_n={refresh_n} />
                     } elif active_page == "overview" {
                         <OverviewPage env={env} date_from={date_from} date_to={date_to} refresh_n={refresh_n} />
                     } elif active_page == "users" {

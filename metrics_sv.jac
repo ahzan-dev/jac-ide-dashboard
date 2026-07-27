@@ -511,6 +511,70 @@ glob METRICS: dict[str, Metric] = {
         definition="Median focused (active-tab) time users spend in the IDE per session.",
         caveat="Empty until ide_session_ended ships to production.",
         sql="SELECT round(median(toFloat64OrNull(toString(properties.duration_active_ms)))/60000,1) FROM events WHERE event='ide_session_ended' {env_filter} " + _RANGE
+    ),
+
+    # ---- entity drill-downs (promoted from the 2026-07-26 hackathon report;
+    # spec §4 G2 — the report/Ask layer reuses these instead of hand-written SQL).
+    # Identity rule: person-merged (person_id), email with an 'anon:' fallback.
+    "user_rollup": Metric(
+        key="user_rollup", title="Per-user activity", shape="rows",
+        definition="One row per active user: signups, projects, AI turns, failures, metered cost, previews, deploys, GitHub, upgrades — the who-did-what table.",
+        caveat="'anon:' rows are devices that never signed in. Cost is platform-metered $ (BYOK runs bill the user's own key).",
+        sql="SELECT coalesce(nullIf(toString(any(person.properties.email)),''), concat('anon:', substring(toString(person_id),1,8))) user, countIf(event='auth_signup_succeeded') signed_up, countIf(event='project_created') projects, countIf(event='ai_message_sent') ai_turns, countIf(event='ai_message_failed') ai_failed, round(sumIf(toFloat64OrNull(toString(properties.cost_usd)), event='ai_generation_metered'),2) cost_usd, countIf(event='ai_generation_metered' AND toString(properties.byok)='true') byok_runs, countIf(event='preview_ready') previews, countIf(event='deploy_sandbox_succeeded') sbx_ok, countIf(event='deploy_sandbox_failed') sbx_fail, countIf(event='deploy_production_succeeded') prod_ok, countIf(event='github_connect_succeeded') gh_ok, countIf(event='upgrade_checkout_succeeded') upgraded FROM events WHERE event IN ('auth_signup_succeeded','project_created','ai_message_sent','ai_message_failed','ai_generation_metered','preview_ready','deploy_sandbox_succeeded','deploy_sandbox_failed','deploy_production_succeeded','github_connect_succeeded','upgrade_checkout_succeeded') {env_filter} " + _RANGE + " GROUP BY person_id ORDER BY ai_turns DESC, cost_usd DESC LIMIT 200"
+    ),
+    "signups_detail": Metric(
+        key="signups_detail", title="Signups (row level)", shape="rows",
+        definition="Every signup in the window: time, email, method, in-app trigger, and UTM source.",
+        caveat="Signups fire server-side (auth_signup_succeeded) — do NOT count logins (auth_succeeded) as signups; its is_new_user flag is unreliable (TRACKING_GAPS D-17).",
+        sql="SELECT substring(toString(timestamp),1,16) ts, coalesce(nullIf(toString(person.properties.email),''), concat('anon:', substring(toString(person_id),1,8))) user, coalesce(toString(properties.method),'') method, coalesce(toString(properties.signup_trigger),'') trigger, coalesce(toString(properties.utm_source),'') utm_source FROM events WHERE event='auth_signup_succeeded' {env_filter} " + _RANGE + " ORDER BY timestamp LIMIT 300"
+    ),
+    "cost_per_turn": Metric(
+        key="cost_per_turn", title="AI cost per run", shape="rows",
+        definition="Every metered AI generation run: time, user, model, dollar cost, key type (platform vs BYOK), and project.",
+        caveat="Per-entity sums of this table MUST reconcile to total_spend to the cent — a mismatch means rows were dropped, not a rounding issue.",
+        sql="SELECT substring(toString(timestamp),1,16) ts, coalesce(nullIf(toString(person.properties.email),''), concat('anon:', substring(toString(person_id),1,8))) user, coalesce(nullIf(toString(properties.model),''),'(blank)') model, round(toFloat64OrNull(toString(properties.cost_usd)),4) cost_usd, if(toString(properties.byok)='true','byok','platform') key_type, coalesce(toString(properties.project_id),'') project_id FROM events WHERE event='ai_generation_metered' {env_filter} " + _RANGE + " ORDER BY timestamp LIMIT 500"
+    ),
+    "cost_by_model": Metric(
+        key="cost_by_model", title="Cost by model", shape="rows",
+        definition="Metered AI spend broken down by the model that ran: runs, users, total/avg/max dollars, and the BYOK share.",
+        caveat="A '(blank)' model row is real spend with a missing model property — an instrumentation gap, not a rounding artifact.",
+        sql="SELECT coalesce(nullIf(toString(properties.model),''),'(blank)') model, count() runs, uniq(person_id) users, round(sum(toFloat64OrNull(toString(properties.cost_usd))),2) total_usd, round(avg(toFloat64OrNull(toString(properties.cost_usd))),4) avg_usd, round(max(toFloat64OrNull(toString(properties.cost_usd))),2) max_usd, countIf(toString(properties.byok)='true') byok_runs FROM events WHERE event='ai_generation_metered' {env_filter} " + _RANGE + " GROUP BY model ORDER BY total_usd DESC LIMIT 20"
+    ),
+    "project_cost_rollup": Metric(
+        key="project_cost_rollup", title="Cost by project", shape="rows",
+        definition="Metered AI spend per project: owner, runs, total dollars, and which models ran.",
+        caveat="Joins on the project_id stamped on AI events — projects with zero AI runs don't appear (project_created carries no project_id).",
+        sql="SELECT coalesce(nullIf(toString(properties.project_id),''),'(none)') project_id, coalesce(nullIf(toString(any(person.properties.email)),''), concat('anon:', substring(toString(any(person_id)),1,8))) owner, count() runs, round(sum(toFloat64OrNull(toString(properties.cost_usd))),2) total_usd, arrayStringConcat(groupUniqArray(coalesce(nullIf(toString(properties.model),''),'(blank)')), ', ') models FROM events WHERE event='ai_generation_metered' {env_filter} " + _RANGE + " GROUP BY project_id ORDER BY total_usd DESC LIMIT 100"
+    ),
+    "byok_split": Metric(
+        key="byok_split", title="BYOK vs platform keys", shape="rows",
+        definition="Metered AI runs split by key type: platform-billed vs the user's own key (BYOK), with runs, users, and dollars each.",
+        caveat="BYOK dollar figures are what the USER'S key was billed, not platform spend.",
+        sql="SELECT if(toString(properties.byok)='true','BYOK (user key)','Platform key') key_type, count() runs, uniq(person_id) users, round(sum(toFloat64OrNull(toString(properties.cost_usd))),2) total_usd FROM events WHERE event='ai_generation_metered' {env_filter} " + _RANGE + " GROUP BY key_type ORDER BY runs DESC"
+    ),
+    "upgrades_detail": Metric(
+        key="upgrades_detail", title="Completed upgrades (row level)", shape="rows",
+        definition="Every completed paid upgrade: time, user, from→to plan, interval, and the actual checkout amount.",
+        caveat="amount_usd is the real checkout value — compute revenue from it, never from list prices.",
+        sql="SELECT substring(toString(timestamp),1,16) ts, coalesce(nullIf(toString(person.properties.email),''), concat('anon:', substring(toString(person_id),1,8))) user, coalesce(toString(properties.plan_from),'') plan_from, coalesce(toString(properties.plan),'') plan, coalesce(toString(properties.interval),'') billing_interval, round(toFloat64OrNull(toString(properties.amount_usd)),2) amount_usd, toString(properties.is_first_upgrade) first_upgrade FROM events WHERE event='upgrade_checkout_succeeded' {env_filter} " + _RANGE + " ORDER BY timestamp LIMIT 200"
+    ),
+    "deploy_outcomes": Metric(
+        key="deploy_outcomes", title="Deploy outcomes", shape="rows",
+        definition="Sandbox vs production deploys: clicks, successes, and failures — each as both event counts and unique users.",
+        caveat="Events and users differ (one user can retry many times) — read the users columns for adoption, the counts for friction.",
+        sql="SELECT if(event LIKE 'deploy_sandbox%','Sandbox','Production') kind, countIf(event IN ('deploy_sandbox_clicked','deploy_production_clicked')) clicks, uniqIf(person_id, event IN ('deploy_sandbox_clicked','deploy_production_clicked')) users_clicked, countIf(event IN ('deploy_sandbox_succeeded','deploy_production_succeeded')) succeeded, uniqIf(person_id, event IN ('deploy_sandbox_succeeded','deploy_production_succeeded')) users_ok, countIf(event IN ('deploy_sandbox_failed','deploy_production_failed')) failed, uniqIf(person_id, event IN ('deploy_sandbox_failed','deploy_production_failed')) users_failed FROM events WHERE event IN ('deploy_sandbox_clicked','deploy_sandbox_succeeded','deploy_sandbox_failed','deploy_production_clicked','deploy_production_succeeded','deploy_production_failed') {env_filter} " + _RANGE + " GROUP BY kind ORDER BY clicks DESC"
+    ),
+    "project_sources": Metric(
+        key="project_sources", title="How projects start", shape="rows",
+        definition="How users started their projects: from a prompt, a template, a GitHub import, or a folder upload.",
+        caveat="Reads properties.source — template_id is a scaffold artifact ('empty' even on prompt-started projects) and must never be used for this breakdown.",
+        sql="SELECT coalesce(nullIf(toString(properties.source),''),'unknown') source, count() n FROM events WHERE event='project_created' {env_filter} " + _RANGE + " GROUP BY source ORDER BY n DESC"
+    ),
+    "issue_log": Metric(
+        key="issue_log", title="Issues & friction log", shape="rows", good_when_up=False,
+        definition="Everything that went wrong, across all failure families: AI failures, quota blocks, preview/deploy/GitHub/checkout failures, and user-aborted turns — with who hit each.",
+        caveat="This is the honest issues source — ai_issue_reported alone (the in-app report button) massively undercounts friction.",
+        sql="SELECT multiIf(event='ai_message_failed','AI generation failed', event='ai_message_blocked_quota','Blocked by quota', event='preview_start_failed','Preview failed', event='deploy_sandbox_failed','Sandbox deploy failed', event='deploy_production_failed','Production deploy failed', event='github_connect_failed','GitHub connect failed', event='upgrade_checkout_failed','Upgrade checkout failed', event='ai_user_aborted','User aborted AI turn', event='ai_issue_reported','Issue reported in-app', event) issue, count() n, uniq(person_id) users, arrayStringConcat(arraySlice(groupUniqArray(coalesce(nullIf(toString(person.properties.email),''), concat('anon:', substring(toString(person_id),1,8)))),1,6), ', ') who FROM events WHERE event IN ('ai_message_failed','ai_message_blocked_quota','preview_start_failed','deploy_sandbox_failed','deploy_production_failed','github_connect_failed','upgrade_checkout_failed','ai_user_aborted','ai_issue_reported') {env_filter} " + _RANGE + " GROUP BY issue ORDER BY n DESC"
     )
 };
 
@@ -538,16 +602,47 @@ def _valid_date(s: str) -> bool {
     return bool(re.match(r"^\d{4}-\d{2}-\d{2}$", s));
 }
 
+# Accept a bare date OR a datetime ("YYYY-MM-DD[ T]HH:MM[:SS]") so sub-day windows
+# (a hackathon, an incident, a launch hour) are first-class. Returns None if invalid.
+def _parse_dt(s: str) -> datetime | None {
+    t = s.strip().replace("T", " ");
+    for fmt in ["%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"] {
+        try {
+            return datetime.strptime(t, fmt);
+        } except Exception {
+            continue;
+        }
+    }
+    return None;
+}
+
+# Canonical form injected into toDateTime('{from}') — always full seconds precision.
+def _norm_dt(d: datetime) -> str {
+    return d.strftime("%Y-%m-%d %H:%M:%S");
+}
+
 # Adaptive time bucket for trend series so a chart always has a sensible number of points
-# regardless of the selected range: daily for short ranges, weekly for medium, monthly for long.
-def _bucket(days: int) -> str {
-    if days <= 31 {
+# regardless of the selected range: 15-min/hourly for sub-day windows, daily for short
+# ranges, weekly for medium, monthly for long. (Single-arg functions only — the SQL
+# templates apply the bucket as `{bkt}(timestamp)`.)
+def _bucket_span(seconds: float) -> str {
+    if seconds <= 12 * 3600 {
+        return "toStartOfFifteenMinutes";
+    }
+    if seconds <= 3 * 86400 {
+        return "toStartOfHour";
+    }
+    if seconds <= 31 * 86400 {
         return "toDate";
     }
-    if days <= 186 {
+    if seconds <= 186 * 86400 {
         return "toStartOfWeek";
     }
     return "toStartOfMonth";
+}
+
+def _bucket(days: int) -> str {
+    return _bucket_span(days * 86400.0);
 }
 
 def _series(rows: list) -> list {
@@ -670,18 +765,23 @@ async def:priv metric(key: str, env: str, date_from: str, date_to: str, refresh:
     }
 
     env = _clamp_env(env);
-    if not (_valid_date(date_from) and _valid_date(date_to)) {
+    dfrom = _parse_dt(date_from);
+    dto = _parse_dt(date_to);
+    if (dfrom is None) or (dto is None) or (dto <= dfrom) {
         return {"value": None, "error": "bad date range", "meta": {}};
     }
-    dfrom = datetime.strptime(date_from, "%Y-%m-%d");
-    dto = datetime.strptime(date_to, "%Y-%m-%d");
-    range_days = (dto - dfrom).days;
+    span_s = (dto - dfrom).total_seconds();
+    range_days = int(span_s / 86400.0);
     if range_days < 1 {
         range_days = 1;
     }
-    bkt = _bucket(range_days);
+    bkt = _bucket_span(span_s);
+    date_from = _norm_dt(dfrom);
+    date_to = _norm_dt(dto);
 
-    window_label = m.window if m.window else f"{date_from} → {date_to} ({range_days}d)";
+    sub_day = span_s < 86400.0;
+    span_label = f"{round(span_s / 3600.0, 1)}h" if sub_day else f"{range_days}d";
+    window_label = m.window if m.window else f"{date_from} → {date_to} ({span_label})";
     meta: dict = {
         "definition": m.definition, "window": window_label, "caveat": m.caveat,
         "env": env, "unit": m.unit, "good_when_up": m.good_when_up, "cached": False
@@ -807,7 +907,11 @@ async def:priv ai_insights(context: dict) -> dict {
 # exceptions (donut/table/vbar) are pinned by key so we don't touch the registry.
 glob _TILE_OVERRIDE: dict = {
     "signup_method": "donut", "model_mix": "donut", "feature_table": "table",
-    "peak_hours": "vbar", "requests_daily": "vbar"
+    "peak_hours": "vbar", "requests_daily": "vbar",
+    # entity drill-downs are multi-column tables, never hbars
+    "user_rollup": "table", "signups_detail": "table", "cost_per_turn": "table",
+    "cost_by_model": "table", "project_cost_rollup": "table", "byok_split": "table",
+    "upgrades_detail": "table", "deploy_outcomes": "table", "issue_log": "table"
 };
 
 def _tile_for(m: Metric) -> str {
@@ -1402,7 +1506,7 @@ async def _run_pin(pin: dict, env: str, date_from: str, date_to: str) -> dict {
 
 async def:priv run_pinned(pins: list, env: str, date_from: str, date_to: str) -> list {
     env = _clamp_env(env);
-    if not (_valid_date(date_from) and _valid_date(date_to)) {
+    if (_parse_dt(date_from) is None) or (_parse_dt(date_to) is None) {
         return [];
     }
     tasks = [];
@@ -1414,6 +1518,314 @@ async def:priv run_pinned(pins: list, env: str, date_from: str, date_to: str) ->
     }
     results = await asyncio.gather(*tasks);
     return list(results);
+}
+
+# ---------------------------------------------------------------------------
+# Report Studio (R1, spec: .docs/posthog/REPORTS_FEATURE_SPEC.md).
+# A Report = ordered sections; tile/table sections carry the SAME recipe dict a
+# Pin does ({kind, ref, title, chart, good_up}) and are executed by _run_pin.
+# mode=snapshot: report_build freezes each section's result into `snapshot`
+# keyed by section id, so a submitted report's numbers never drift.
+# ---------------------------------------------------------------------------
+
+node Report {
+    has title: str = "Report";
+    has from_dt: str = "";
+    has to_dt: str = "";
+    has env: str = "prod";
+    has mode: str = "snapshot";     # snapshot | live (live lands in R4)
+    has template: str = "";
+    has sections: list = [];        # [{id, type: header|tile|table|text, title, recipe, md}]
+    has snapshot: dict = {};        # section id -> frozen {title, chart, data}
+    has built_at: str = "";
+    has created_at: str = "";
+}
+
+node NamedWindow {
+    has data: dict = {};            # {name, from_dt, to_dt}
+}
+
+# A tile/table section for a registry metric — derived from METRICS at create
+# time so titles/charts can't drift from the registry.
+def _sec_metric(sid: str, key: str) -> dict {
+    m = METRICS[key];
+    ch = _tile_for(m);
+    kind = "table" if ch == "table" else "tile";
+    return {"id": sid, "type": kind, "title": m.title, "md": "",
+            "recipe": {"kind": "metric", "ref": key, "title": m.title, "chart": ch, "good_up": m.good_when_up}};
+}
+
+def _sec_header(sid: str, title: str) -> dict {
+    return {"id": sid, "type": "header", "title": title, "md": "", "recipe": {}};
+}
+
+def _sec_text(sid: str, title: str, md: str) -> dict {
+    return {"id": sid, "type": "text", "title": title, "md": md, "recipe": {}};
+}
+
+glob _METHOD_MD: str = "Every number on this report is env-filtered (production = host allowlist ∪ "
+    + "environment='prod') and scoped to the report window shown above. Cost = server-metered "
+    + "ai_generation_metered dollars. Signups = auth_signup_succeeded (server-side; never login "
+    + "events). Project start method reads properties.source. Users vs events are reported "
+    + "separately wherever retries exist. 'anon:' rows are devices that never identified.";
+
+def _report_template(template: str) -> list {
+    if template == "event-report" {
+        return [
+            _sec_header("s01", "Executive summary"),
+            _sec_text("s02", "Summary", "_Write your summary here — AI generation lands in R2._"),
+            _sec_metric("s03", "new_signups"),
+            _sec_metric("s04", "total_spend"),
+            _sec_metric("s05", "paid_upgrades"),
+            _sec_metric("s06", "preview_reliability"),
+            _sec_header("s07", "Participants"),
+            _sec_metric("s08", "signup_method"),
+            _sec_metric("s09", "signups_detail"),
+            _sec_metric("s10", "user_rollup"),
+            _sec_header("s11", "Projects & activation"),
+            _sec_metric("s12", "project_sources"),
+            _sec_metric("s13", "funnel"),
+            _sec_header("s14", "AI usage & cost"),
+            _sec_metric("s15", "requests_daily"),
+            _sec_metric("s16", "cost_by_model"),
+            _sec_metric("s17", "byok_split"),
+            _sec_metric("s18", "project_cost_rollup"),
+            _sec_metric("s19", "cost_per_turn"),
+            _sec_header("s20", "Deploys"),
+            _sec_metric("s21", "deploy_outcomes"),
+            _sec_header("s22", "Monetization"),
+            _sec_metric("s23", "upgrades_detail"),
+            _sec_header("s24", "Issues & friction"),
+            _sec_metric("s25", "issue_log"),
+            _sec_text("s26", "Method & caveats", _METHOD_MD)
+        ];
+    }
+    return [_sec_header("s01", "Untitled section"),
+            _sec_text("s02", "Notes", "_Add sections from any tile's 'Add to report'._")];
+}
+
+def _report_meta(r: Report) -> dict {
+    return {"id": jid(r), "title": r.title, "from_dt": r.from_dt, "to_dt": r.to_dt,
+            "env": r.env, "mode": r.mode, "template": r.template,
+            "sections_count": len(r.sections), "built_at": r.built_at, "created_at": r.created_at};
+}
+
+def:priv report_create(title: str, from_dt: str, to_dt: str, env: str, template: str) -> dict {
+    df = _parse_dt(from_dt);
+    dt_ = _parse_dt(to_dt);
+    if (df is None) or (dt_ is None) or (dt_ <= df) {
+        return {"id": "", "error": "bad window — from must be before to"};
+    }
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M");
+    r = Report(title=(title.strip() if title.strip() else "Report"),
+               from_dt=_norm_dt(df), to_dt=_norm_dt(dt_), env=_clamp_env(env),
+               template=template, sections=_report_template(template), created_at=now);
+    root ++> r;
+    out = _report_meta(r);
+    out["error"] = "";
+    return out;
+}
+
+def:priv report_list() -> list {
+    out: list[dict] = [];
+    for r in [root -->][?:Report] {
+        out = out + [_report_meta(r)];
+    }
+    out.sort(key=lambda (x: dict) { str(x["created_at"]); }, reverse=True);
+    return out;
+}
+
+def:priv report_get(report_id: str) -> dict {
+    for r in [root -->][?:Report] {
+        if jid(r) == report_id {
+            out = _report_meta(r);
+            out["sections"] = r.sections;
+            out["snapshot"] = r.snapshot;
+            out["checks"] = _report_checks(r);
+            return out;
+        }
+    }
+    return {"id": "", "sections": [], "snapshot": {}};
+}
+
+# Title / sections edit (text sections, reorder, delete). Snapshot entries for
+# section ids that survive are kept; orphaned ids are dropped.
+def:priv report_update(report_id: str, title: str, sections: list) -> dict {
+    for r in [root -->][?:Report] {
+        if jid(r) == report_id {
+            if title.strip() {
+                r.title = title.strip();
+            }
+            if sections {
+                r.sections = sections;
+                keep = {};
+                for s in sections {
+                    sd = s as dict;
+                    sid = str(sd.get("id", ""));
+                    if sid in r.snapshot {
+                        keep[sid] = r.snapshot[sid];
+                    }
+                }
+                r.snapshot = keep;
+            }
+            out = _report_meta(r);
+            out["sections"] = r.sections;
+            out["snapshot"] = r.snapshot;
+            return out;
+        }
+    }
+    return {"id": "", "sections": [], "snapshot": {}};
+}
+
+def:priv report_delete(report_id: str) -> bool {
+    for r in [root -->][?:Report] {
+        if jid(r) == report_id {
+            del r;
+            return True;
+        }
+    }
+    return False;
+}
+
+# Cross-section sanity checks (spec §10.3): per-entity cost tables must
+# reconcile with the scalar total — surface a mismatch, never a plug row.
+def _report_checks(r: Report) -> list {
+    checks: list[dict] = [];
+    total = 0.0;
+    has_total = False;
+    turns_sum = 0.0;
+    has_turns = False;
+    for s in r.sections {
+        sd = s as dict;
+        rec = sd.get("recipe", {}) as dict;
+        snap = r.snapshot.get(str(sd.get("id", "")), {}) as dict;
+        data = snap.get("data", {}) as dict;
+        if rec.get("ref") == "total_spend" {
+            v = data.get("value");
+            if v is not None {
+                try {
+                    total = float(str(v));
+                    has_total = True;
+                } except Exception {
+                    has_total = False;
+                }
+            }
+        }
+        if rec.get("ref") == "cost_per_turn" {
+            cols = data.get("columns", []) as list;
+            ci = _col_index(cols, "cost_usd");
+            if ci >= 0 {
+                turns_sum = 0.0;
+                for row in data.get("rows", []) as list {
+                    rr = row as list;
+                    if (ci < len(rr)) and (rr[ci] is not None) {
+                        try {
+                            turns_sum = turns_sum + float(str(rr[ci]));
+                        } except Exception {
+                            continue;
+                        }
+                    }
+                }
+                has_turns = True;
+            }
+        }
+    }
+    if has_total and has_turns {
+        diff = total - turns_sum;
+        if diff < 0.0 {
+            diff = -diff;
+        }
+        ok = diff < 0.05;
+        checks = checks + [{"name": "cost reconciliation",
+            "ok": ok,
+            "detail": f"per-turn rows sum ${round(turns_sum, 2)} vs total ${round(total, 2)}"
+                + ("" if ok else " — rows were dropped (row cap?) or the window drifted")}];
+    }
+    return checks;
+}
+
+async def _do_report_build(target: Report) -> dict {
+    runnable: list[dict] = [];
+    for s in target.sections {
+        sd = s as dict;
+        rec = sd.get("recipe", {}) as dict;
+        if rec.get("kind") {
+            runnable = runnable + [sd];
+        }
+    }
+    snap = {};
+    if runnable {
+        tasks = [];
+        for sd in runnable {
+            tasks = tasks + [_run_pin(sd["recipe"] as dict, target.env, target.from_dt, target.to_dt)];
+        }
+        results = await asyncio.gather(*tasks);
+        i = 0;
+        for sd in runnable {
+            snap[str(sd["id"])] = results[i];
+            i = i + 1;
+        }
+    }
+    target.snapshot = snap;
+    target.built_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M");
+    out = _report_meta(target);
+    out["sections"] = target.sections;
+    out["snapshot"] = target.snapshot;
+    out["checks"] = _report_checks(target);
+    out["error"] = "";
+    return out;
+}
+
+async def:priv report_build(report_id: str, refresh: bool) -> dict {
+    for r in [root -->][?:Report] {
+        if jid(r) == report_id {
+            return await _do_report_build(r);
+        }
+    }
+    return {"id": "", "sections": [], "snapshot": {}, "error": "report not found"};
+}
+
+# ---- named windows (G9) — "during the hackathon" as a first-class range ------
+
+def:priv window_list() -> list {
+    out: list[dict] = [];
+    for w in [root -->][?:NamedWindow] {
+        out = out + [w.data];
+    }
+    out.sort(key=lambda (x: dict) { str(x["from_dt"]); }, reverse=True);
+    return out;
+}
+
+def:priv window_add(name: str, from_dt: str, to_dt: str) -> list {
+    df = _parse_dt(from_dt);
+    dt_ = _parse_dt(to_dt);
+    nm = name.strip();
+    if (df is None) or (dt_ is None) or (dt_ <= df) or (not nm) {
+        return window_list();
+    }
+    for w in [root -->][?:NamedWindow] {
+        d = w.data;
+        if str(d["name"]) == nm {
+            w.data = {"name": nm, "from_dt": _norm_dt(df), "to_dt": _norm_dt(dt_)};
+            return window_list();
+        }
+    }
+    root ++> NamedWindow(data={"name": nm, "from_dt": _norm_dt(df), "to_dt": _norm_dt(dt_)});
+    return window_list();
+}
+
+def:priv window_remove(name: str) -> list {
+    victims: list = [];
+    for w in [root -->][?:NamedWindow] {
+        d = w.data;
+        if str(d["name"]) == name {
+            victims = victims + [w];
+        }
+    }
+    for v in victims {
+        del v;
+    }
+    return window_list();
 }
 
 # ---------------------------------------------------------------------------
@@ -1476,10 +1888,14 @@ async def _run_metric(m: Metric, out: dict, env: str, range_days: int, date_from
     if m.shape == "scalar" {
         val = _scalar(rows);
         out["value"] = val;
-        # compare-to-previous: same query over the immediately-preceding window of equal length
+        # compare-to-previous: same query over the immediately-preceding window of EXACT
+        # equal length (span-based, so a 7.5h window compares against the prior 7.5h).
         if "{from}" in m.sql {
+            # date_from/date_to were normalized by metric() — parse is infallible here.
+            wf = datetime.strptime(date_from, "%Y-%m-%d %H:%M:%S");
+            wt = datetime.strptime(date_to, "%Y-%m-%d %H:%M:%S");
             prev_to = date_from;
-            prev_from = (datetime.strptime(date_from, "%Y-%m-%d") - timedelta(days=range_days)).strftime("%Y-%m-%d");
+            prev_from = _norm_dt(wf - (wt - wf));
             pres = await asyncio.to_thread(run_hogql, _fill(m.sql, env, prev_from, prev_to, bkt));
             if "error" not in pres {
                 pv = _scalar(pres["results"] as list);

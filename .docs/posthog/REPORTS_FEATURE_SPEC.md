@@ -212,7 +212,29 @@ R2 and R3 are each small (the byLLM and Pin/Gate patterns already exist to copy)
 
 ---
 
-## 10 · Non-goals
+## 10 · Lessons from the PostHog Max AI comparison (2026-07-27)
+
+Max AI answered the same hackathon question with correct *totals* but five material errors — every one
+a **context** failure, not a SQL failure. These become R1 acceptance fixtures and design rules:
+
+1. **Participants rule**: participants = `auth_signup_succeeded` ∪ `auth_succeeded` persons. Max used
+   logins only → "0 signups" in a 91-signup window (compounded by the `is_new_user` bug, TRACKING_GAPS
+   §D-17). The `signups_detail`/`user_rollup` metrics encode this so no consumer re-derives it.
+2. **Source-not-template rule**: project start method reads `project_created.source`; `template_id`
+   (`'empty'` on every prompt-started project) is a scaffold artifact. Max inverted 35-prompt/4-template
+   into ~10/~28.
+3. **Reconciliation invariant**: any per-entity cost table must sum to the window total to the cent —
+   Max's top-spender table lost ~$30 into a subtraction plug ("remaining users ≈ $X"). `report_build`
+   should assert Σ(per-user) == total and surface a mismatch as an error banner, never a plug row.
+4. **Env filter is non-optional**: unfiltered window = 41 projects / 21 sandbox-oks vs prod 40 / 20 —
+   Max's exact numbers. Small delta this time by luck; the registry injects `env_filter()` always.
+5. **Users-vs-events discipline**: 18 `github_connect_succeeded` events = **13** users; Max reported
+   "18 users (~24%)" and invented names. Every promoted metric carries both counts explicitly.
+6. **"Issues" is six event families** (`ai_message_failed`, quota blocks, preview/deploy/github/checkout
+   failures + aborts), not just `ai_issue_reported` (1 row). The `issue_log` metric is the single
+   honest source.
+
+## 11 · Non-goals
 
 - No WYSIWYG layout editor — sections are a vertical list, period.
 - No public *live* reports — public = snapshot, always (invariant §8.1).

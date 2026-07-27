@@ -36,7 +36,15 @@ Internal, read-only analytics cockpit. Full-stack Jac app. Reads PostHog via ser
   "credential":{"type":"password","password":"..."}}` — a flat `"identity":"admin"` now 422s. Response is an
   envelope; token is at `data.token` (~321 chars, plus `user_id`/`root_id`/`role`). `/user/register` keeps the
   identities-array form. `/function/*` bodies are flat named params and `refresh` is REQUIRED (422 if omitted);
-  unauth → 401. Per
+  unauth → 401.
+- **byLLM deps are capability-gated**: litellm/httpx/loguru/pillow only install when jac.toml declares the
+  `llm` intent — the empty **`[byllm]`** section (bottom of jac.toml) does exactly that; then `jac install`
+  syncs them. Without it every `by llm()` call fails `ImportError: 'litellm' is required` (planner/insights
+  degrade to error text, HTTP still 200 — check logs, not status codes).
+- **Stale-cache footgun**: if byllm modules were compiled while litellm was missing, `by llm()` later fails
+  `'types.SimpleNamespace' object has no attribute 'completion'` (the cached optdeps stub) even though litellm
+  imports fine. Fix: `jac clean --cache --force && jac purge`, restart (first boot after ≈3–4 min recompile).
+  Do NOT plain `jac clean` (would target `.jac/data`). Per
 docs.jaseci.org/community/breaking-changes: the **pluggy plugin/hook system was removed** (`hookimpl` gone) and
 **byllm + jac-scale are folded into jaclang core** — no back-compat shims. Consequences that WILL bite:
 - **byLLM import is `import from jaclang.byllm.lib { Model }`** (was `byllm.lib`). **Do NOT `jac install byllm`** —

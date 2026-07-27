@@ -124,6 +124,18 @@
 - Expose to the Ask planner's schema doc: **Stripe MRR** (already in `billing_sv.jac`, so "revenue" stops
   mapping to cost) and PostHog **`$session_id`** (a rough session-length proxy until A-4 ships).
 
+### D-17 · `is_new_user` on `auth_succeeded` is false right after signup — **HIGH (correctness)**
+- Found 2026-07-27 while auditing the hackathon report: all 79 `auth_succeeded` events in the hackathon
+  window carry `is_new_user=false`, yet 71 of those 76 users had fired `auth_signup_succeeded` minutes
+  earlier in the same window. The flag is effectively always false.
+- Consequence: any consumer trusting it concludes "no new users" — PostHog's Max AI did exactly this
+  and reported **0 signups** for a window with **91**. Fix in the jac-ide auth flow (set it from the
+  same profile-created check that fires `auth_signup_succeeded`), or drop the property from the
+  contract so nobody trusts it.
+- Related caveat for analysts: signups fire **server-side** under `analytics_id or user_id` while the
+  client login event may ride a different pre-merge `distinct_id` — per-person joins across the two
+  must go through PostHog person merging, not raw `distinct_id` equality.
+
 ---
 
 *Generated from the AI-builder planner eval. See the eval report artifact for the full scorecard and the
