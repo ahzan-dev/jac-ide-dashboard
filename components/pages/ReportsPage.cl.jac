@@ -7,7 +7,7 @@
 # component BODIES (SectionBlock) or precomputed dicts, never inside a for-slot.
 sv import from ...metrics_sv {
     report_list, report_create, report_get, report_build, report_delete,
-    window_list, window_add
+    report_generate, window_list, window_add
 }
 import from ..dash.DynamicTile { DynamicTile }
 import from ..ui.card { Card, CardHeader, CardTitle, CardDescription, CardContent }
@@ -89,6 +89,8 @@ def:pub ReportsPage(env: str, date_from: str, date_to: str, refresh_n: int) -> J
     has building: bool = False;
     has windows: list[dict] = [];
     has f_wname: str = "";
+    has generating: bool = False;
+    has gen_error: str = "";
 
     async def load_list() {
         loading = True;
@@ -126,6 +128,20 @@ def:pub ReportsPage(env: str, date_from: str, date_to: str, refresh_n: int) -> J
         building = True;
         active = (await report_build(active_id, True)) as dict;
         building = False;
+    }
+    async def gen_ai(e: MouseEvent) {
+        if not active_id {
+            return;
+        }
+        generating = True;
+        gen_error = "";
+        res = (await report_generate(active_id)) as dict;
+        if res.get("ok", False) as bool {
+            active = (await report_get(active_id)) as dict;
+        } else {
+            gen_error = str(res.get("reason", "generation failed"));
+        }
+        generating = False;
     }
     def back(e: MouseEvent) {
         active_id = "";
@@ -253,6 +269,7 @@ def:pub ReportsPage(env: str, date_from: str, date_to: str, refresh_n: int) -> J
     new_btn_label = "Close" if show_form else "+ New report";
     create_btn_label = "Creating…" if creating else "Create & build";
     rebuild_btn_label = "Building…" if building else "Rebuild";
+    gen_btn_label = "Generating…" if generating else "✨ Generate insights";
 
     return <div className="flex flex-col gap-4">
         {if active_id == "" {
@@ -368,9 +385,13 @@ def:pub ReportsPage(env: str, date_from: str, date_to: str, refresh_n: int) -> J
                     <div className="flex items-center gap-2">
                         <Button variant="ghost" size="sm" onClick={back}>← All reports</Button>
                         <Button variant="outline" size="sm" onClick={rebuild} disabled={building}>{rebuild_btn_label}</Button>
+                        <Button variant="outline" size="sm" onClick={gen_ai} disabled={generating}>{gen_btn_label}</Button>
                         <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive" onClick={remove}>Delete</Button>
                     </div>
                 </div>
+                {if gen_error != "" {
+                    <p className="text-xs text-destructive">AI insights: {gen_error}</p>
+                }}
 
                 {if len(failed_checks) > 0 {
                     <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">

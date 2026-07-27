@@ -564,6 +564,12 @@ glob METRICS: dict[str, Metric] = {
         caveat="Events and users differ (one user can retry many times) — read the users columns for adoption, the counts for friction.",
         sql="SELECT if(event LIKE 'deploy_sandbox%','Sandbox','Production') kind, countIf(event IN ('deploy_sandbox_clicked','deploy_production_clicked')) clicks, uniqIf(person_id, event IN ('deploy_sandbox_clicked','deploy_production_clicked')) users_clicked, countIf(event IN ('deploy_sandbox_succeeded','deploy_production_succeeded')) succeeded, uniqIf(person_id, event IN ('deploy_sandbox_succeeded','deploy_production_succeeded')) users_ok, countIf(event IN ('deploy_sandbox_failed','deploy_production_failed')) failed, uniqIf(person_id, event IN ('deploy_sandbox_failed','deploy_production_failed')) users_failed FROM events WHERE event IN ('deploy_sandbox_clicked','deploy_sandbox_succeeded','deploy_sandbox_failed','deploy_production_clicked','deploy_production_succeeded','deploy_production_failed') {env_filter} " + _RANGE + " GROUP BY kind ORDER BY clicks DESC"
     ),
+    "user_model_cost_matrix": Metric(
+        key="user_model_cost_matrix", title="Cost per user × model", shape="composite",
+        definition="Each user's metered AI spend broken down by model — one column per model, ranked by total spend.",
+        caveat="Pivot of the per-run cost rows; row totals reconcile to total_spend. Blank cells = the user never ran that model.",
+        sql="COMPOSITE:cost_per_turn"
+    ),
     "project_sources": Metric(
         key="project_sources", title="How projects start", shape="rows",
         definition="How users started their projects: from a prompt, a template, a GitHub import, or a folder upload.",
@@ -911,7 +917,8 @@ glob _TILE_OVERRIDE: dict = {
     # entity drill-downs are multi-column tables, never hbars
     "user_rollup": "table", "signups_detail": "table", "cost_per_turn": "table",
     "cost_by_model": "table", "project_cost_rollup": "table", "byok_split": "table",
-    "upgrades_detail": "table", "deploy_outcomes": "table", "issue_log": "table"
+    "upgrades_detail": "table", "deploy_outcomes": "table", "issue_log": "table",
+    "user_model_cost_matrix": "table"
 };
 
 def _tile_for(m: Metric) -> str {
@@ -1588,6 +1595,7 @@ def _report_template(template: str) -> list {
             _sec_header("s14", "AI usage & cost"),
             _sec_metric("s15", "requests_daily"),
             _sec_metric("s16", "cost_by_model"),
+            _sec_metric("s16b", "user_model_cost_matrix"),
             _sec_metric("s17", "byok_split"),
             _sec_metric("s18", "project_cost_rollup"),
             _sec_metric("s19", "cost_per_turn"),
@@ -1785,6 +1793,216 @@ async def:priv report_build(report_id: str, refresh: bool) -> dict {
     return {"id": "", "sections": [], "snapshot": {}, "error": "report not found"};
 }
 
+# ---- R2: AI synthesis — summary / findings / caveats over the FROZEN snapshot.
+# Mirrors ai_insights' honest-degrade pattern; only ai-flagged sections are ever
+# replaced, human-written text sections are never touched.
+
+obj ReportInsights {
+    has summary: str = "";
+    has findings: list[str] = [];
+    has caveats: list[str] = [];
+}
+sem ReportInsights = "A decision-maker's readout of a metrics report: what happened, what stands out, what to distrust.";
+sem ReportInsights.summary = "3-5 plain-English sentences summarizing the report window for a decision-maker. Cite the concrete numbers (counts, dollars, percentages) from the context. No preamble, no bullet points.";
+sem ReportInsights.findings = "3-6 short bullet findings, each citing a specific number and saying why it matters or what action it suggests. Most important first.";
+sem ReportInsights.caveats = "2-4 short honesty caveats a reader must know before acting: data gaps named in the context (blank model rows, proxy metrics, small samples), users-vs-events distinctions, anything that could mislead.";
+
+def _write_report_insights(context: str) -> ReportInsights by INSIGHT_LLM(max_tokens=900);
+sem _write_report_insights = "You are the analytics writer for JacHammer (an AI-powered web IDE). Given a report's frozen, environment-filtered metrics for a specific time window, write the executive readout. Use ONLY numbers present in the context — never invent or extrapolate. HARD RULE: table rows are TRUNCATED SAMPLES — never sum, count, or extrapolate a total from them; totals you may cite are the scalar lines and the 'FULL-TABLE sums' lines only. Findings must each cite a number. Caveats must reflect real limitations visible in the context (e.g. a '(blank)' model row means unattributed spend; users vs events differ where retries exist).";
+sem _write_report_insights.context = "The report: title, window, then one line per section — scalars as 'title: value (delta% vs previous window)', tables as their columns and top rows.";
+
+# Compact snapshot -> prompt context. Scalars one line; tables top-5 rows.
+def _report_context(r: Report) -> str {
+    parts = ["REPORT: " + r.title,
+             "WINDOW: " + r.from_dt + " -> " + r.to_dt + " UTC (env " + r.env + ")"];
+    for s in r.sections {
+        sd = s as dict;
+        rec = sd.get("recipe", {}) as dict;
+        if not rec.get("kind") {
+            continue;
+        }
+        snap = r.snapshot.get(str(sd.get("id", "")), {}) as dict;
+        data = snap.get("data", {}) as dict;
+        ttl = str(sd.get("title", ""));
+        v = data.get("value");
+        if v is not None {
+            line = ttl + ": " + str(v);
+            d = data.get("delta");
+            if d is not None {
+                line = line + " (" + str(round(d as float)) + "% vs previous window)";
+            }
+            parts = parts + [line];
+        } else {
+            cols = data.get("columns", []) as list;
+            rows = data.get("rows", []) as list;
+            if rows {
+                colnames = [];
+                for c in cols {
+                    colnames = colnames + [str(c)];
+                }
+                parts = parts + [ttl + " [" + ", ".join(colnames) + "] top rows:"];
+                n = 0;
+                for row in rows {
+                    if n >= 5 {
+                        break;
+                    }
+                    parts = parts + ["  " + str(row)];
+                    n = n + 1;
+                }
+                if len(rows) > 5 {
+                    parts = parts + ["  ... (" + str(len(rows)) + " rows total — the rows above are a SAMPLE)"];
+                }
+                # Full-table sums for numeric columns, so totals never have to be
+                # (wrongly) extrapolated from the sampled rows above.
+                sums: list = [];
+                ci2 = 0;
+                for cn in colnames {
+                    total = 0.0;
+                    seen = False;
+                    for row2 in rows {
+                        rl2 = row2 as list;
+                        if ci2 < len(rl2) {
+                            cv = rl2[ci2];
+                            if isinstance(cv, (int, float)) {
+                                total = total + (cv as float);
+                                seen = True;
+                            }
+                        }
+                    }
+                    if seen and (cn not in ["ts"]) {
+                        sums = sums + [cn + "=" + str(round(total, 2))];
+                    }
+                    ci2 = ci2 + 1;
+                }
+                if sums {
+                    parts = parts + ["  FULL-TABLE sums (all " + str(len(rows)) + " rows): " + ", ".join(sums)];
+                }
+            }
+        }
+    }
+    txt = "\n".join(parts);
+    return txt[:6000];
+}
+
+def _strip_ai_sections(sections: list) -> list {
+    out: list = [];
+    for s in sections {
+        sd = s as dict;
+        if not (sd.get("ai", False) as bool) {
+            out = out + [sd];
+        }
+    }
+    return out;
+}
+
+# Replace ai-flagged sections: summary+findings go up top (after a leading
+# header if present), caveats at the end. Human sections keep their order.
+def _merge_ai_sections(sections: list, summary: str, findings: list, caveats: list) -> list {
+    base = _strip_ai_sections(sections);
+    fnd_md = "";
+    for f in findings {
+        fnd_md = fnd_md + "• " + str(f) + "\n";
+    }
+    cav_md = "";
+    for c in caveats {
+        cav_md = cav_md + "• " + str(c) + "\n";
+    }
+    sum_sec = {"id": "ai1", "type": "text", "title": "AI summary", "md": summary, "recipe": {}, "ai": True};
+    fnd_sec = {"id": "ai2", "type": "text", "title": "Findings (AI)", "md": fnd_md.strip(), "recipe": {}, "ai": True};
+    cav_sec = {"id": "ai3", "type": "text", "title": "Caveats (AI)", "md": cav_md.strip(), "recipe": {}, "ai": True};
+    pos = 0;
+    if base {
+        first = base[0] as dict;
+        if str(first.get("type", "")) == "header" {
+            pos = 1;
+        }
+    }
+    return base[:pos] + [sum_sec, fnd_sec] + base[pos:] + [cav_sec];
+}
+
+async def _do_report_generate(r: Report) -> dict {
+    if not r.snapshot {
+        await _do_report_build(r);
+    }
+    ctx = _report_context(r);
+    if not ctx {
+        return {"ok": False, "reason": "nothing to summarize — build the report first"};
+    }
+    try {
+        ins = await asyncio.to_thread(_write_report_insights, ctx);
+    } except Exception as e {
+        return {"ok": False, "reason": str(e)[:160]};
+    }
+    r.sections = _merge_ai_sections(r.sections, str(ins.summary).strip(), list(ins.findings), list(ins.caveats));
+    return {"ok": True, "reason": ""};
+}
+
+async def:priv report_generate(report_id: str) -> dict {
+    if not ANTH_KEY {
+        return {"ok": False, "reason": "ANTHROPIC_API_KEY not set on the server."};
+    }
+    for r in [root -->][?:Report] {
+        if jid(r) == report_id {
+            return await _do_report_generate(r);
+        }
+    }
+    return {"ok": False, "reason": "report not found"};
+}
+
+# ---- R2: compile an Ask thread into a report — the investigation you already
+# did becomes the document (questions/answers as text, tiles as live recipes).
+
+def _thread_to_report(t: Thread, title: str, env: str, from_dt: str, to_dt: str) -> dict {
+    df = _parse_dt(from_dt);
+    dt_ = _parse_dt(to_dt);
+    if (df is None) or (dt_ is None) or (dt_ <= df) {
+        return {"id": "", "error": "bad window"};
+    }
+    secs: list = [];
+    n = 0;
+    for m in t.messages {
+        md = m as dict;
+        role = str(md.get("role", ""));
+        if role == "user" {
+            n = n + 1;
+            secs = secs + [_sec_text("t" + str(n), "Question", "❓ " + str(md.get("text", "")))];
+        } elif role == "assistant" {
+            txt = str(md.get("text", ""));
+            if txt {
+                n = n + 1;
+                secs = secs + [_sec_text("t" + str(n), "Answer", txt)];
+            }
+            for tl in (md.get("tiles", []) as list) {
+                tld = tl as dict;
+                rec = tld.get("recipe", {}) as dict;
+                if rec.get("kind") {
+                    n = n + 1;
+                    ch = str(rec.get("chart", "table"));
+                    kind = "table" if ch == "table" else "tile";
+                    secs = secs + [{"id": "t" + str(n), "type": kind, "title": str(rec.get("title", "Tile")), "md": "", "recipe": rec}];
+                }
+            }
+        }
+    }
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M");
+    ttl = title.strip() if title.strip() else ("Ask: " + t.title);
+    r = Report(title=ttl, from_dt=_norm_dt(df), to_dt=_norm_dt(dt_), env=_clamp_env(env),
+               template="from-thread", sections=secs, created_at=now);
+    root ++> r;
+    out = _report_meta(r);
+    out["error"] = "";
+    return out;
+}
+
+def:priv report_from_thread(thread_id: str, title: str, env: str, from_dt: str, to_dt: str) -> dict {
+    for t in [root -->][?:Thread] {
+        if jid(t) == thread_id {
+            return _thread_to_report(t, title, env, from_dt, to_dt);
+        }
+    }
+    return {"id": "", "error": "thread not found"};
+}
+
 # ---- named windows (G9) — "during the hackathon" as a first-class range ------
 
 def:priv window_list() -> list {
@@ -1850,7 +2068,93 @@ def:priv event_usage(events: list) -> dict {
     return out;
 }
 
+# ---- composite metrics (G3): N queries + a Python combine step -------------
+# Pivot per-turn cost rows into user × model dollar columns. Pure — tested.
+def _pivot_user_model(cols: list, rows: list) -> dict {
+    ui = _col_index(cols, "user");
+    mi = _col_index(cols, "model");
+    ci = _col_index(cols, "cost_usd");
+    if (ui < 0) or (mi < 0) or (ci < 0) {
+        return {"error": "pivot input missing user/model/cost_usd columns"};
+    }
+    per_user: dict = {};      # user -> {model -> usd}
+    user_runs: dict = {};
+    model_tot: dict = {};
+    order: list = [];
+    for r in rows {
+        rl = r as list;
+        u = str(rl[ui]);
+        mdl = str(rl[mi]);
+        c = rl[ci];
+        cv = 0.0;
+        if c is not None {
+            cv = c as float;
+        }
+        if u not in per_user {
+            per_user[u] = {};
+            user_runs[u] = 0;
+            order = order + [u];
+        }
+        um = per_user[u] as dict;
+        um[mdl] = (um.get(mdl, 0.0) as float) + cv;
+        user_runs[u] = (user_runs[u] as int) + 1;
+        model_tot[mdl] = (model_tot.get(mdl, 0.0) as float) + cv;
+    }
+    models: list = [];
+    for k in model_tot.keys() {
+        models = models + [[model_tot[k], k]];
+    }
+    models.sort(key=lambda (p: list) { p[0] as float; }, reverse=True);
+    mcols: list = [];
+    for p in models {
+        mcols = mcols + [str((p as list)[1])];
+    }
+    totals: list = [];
+    for u in order {
+        um2 = per_user[u] as dict;
+        tot = 0.0;
+        for mk in um2.keys() {
+            tot = tot + (um2[mk] as float);
+        }
+        totals = totals + [[tot, u]];
+    }
+    totals.sort(key=lambda (p: list) { p[0] as float; }, reverse=True);
+    out_rows: list = [];
+    for p in totals {
+        pu = str((p as list)[1]);
+        um3 = per_user[pu] as dict;
+        row: list = [pu, user_runs[pu], round((p as list)[0] as float, 2)];
+        for mc in mcols {
+            mv = um3.get(mc);
+            row = row + [round(mv as float, 2) if mv is not None else None];
+        }
+        out_rows = out_rows + [row];
+    }
+    return {"columns": ["user", "runs", "total_usd"] + mcols, "rows": out_rows};
+}
+
+async def _cx_user_model_matrix(env: str, date_from: str, date_to: str) -> dict {
+    src = METRICS["cost_per_turn"];
+    res = await asyncio.to_thread(run_hogql, _fill(src.sql, env, date_from, date_to, "toDate"));
+    if "error" in res {
+        return {"error": res["error"]};
+    }
+    return _pivot_user_model(res["columns"] as list, res["results"] as list);
+}
+
 async def _run_metric(m: Metric, out: dict, env: str, range_days: int, date_from: str, date_to: str, bkt: str, ck: str) -> dict {
+    if m.shape == "composite" {
+        r = await _cx_user_model_matrix(env, date_from, date_to);
+        if "error" in r {
+            out["error"] = r["error"];
+            return out;
+        }
+        out["columns"] = r["columns"];
+        out["rows"] = r["rows"];
+        _cache_put(ck, out);
+        return out;
+    }
+
     if m.shape == "retention" {
         r = await asyncio.to_thread(_shape_retention, env);
         if "error" in r {

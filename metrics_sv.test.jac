@@ -280,6 +280,48 @@ test "unknown template falls back to a blank scaffold" {
 # ---------------------------------------------------------------------------
 # R1: cost reconciliation check (Max-AI lesson 3 — no silent plug rows)
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# R2: AI-section merge + user×model pivot (pure parts of report_generate)
+# ---------------------------------------------------------------------------
+test "merge_ai_sections inserts after leading header, strips old ai sections" {
+    base = [
+        {"id": "s01", "type": "header", "title": "H", "md": "", "recipe": {}},
+        {"id": "s03", "type": "tile", "title": "T", "md": "", "recipe": {"kind": "metric", "ref": "new_signups"}},
+        {"id": "ai1", "type": "text", "title": "old", "md": "stale", "recipe": {}, "ai": True}
+    ];
+    out = _merge_ai_sections(base, "SUM", ["f1", "f2"], ["c1"]);
+    assert str(out[0]["id"]) == "s01";
+    assert str(out[1]["id"]) == "ai1" and str(out[1]["md"]) == "SUM";
+    assert str(out[2]["id"]) == "ai2" and "f1" in str(out[2]["md"]);
+    assert str(out[len(out) - 1]["id"]) == "ai3" and "c1" in str(out[len(out) - 1]["md"]);
+    # idempotent: regenerating never duplicates ai sections
+    out2 = _merge_ai_sections(out, "SUM2", [], []);
+    n_ai = 0;
+    for s in out2 {
+        if (s as dict).get("ai", False) as bool {
+            n_ai = n_ai + 1;
+        }
+    }
+    assert n_ai == 3;
+}
+test "pivot_user_model builds ranked user rows with per-model columns" {
+    cols = ["ts", "user", "model", "cost_usd", "key_type", "project_id"];
+    rows = [
+        ["t1", "a@x.com", "sonnet", 2.0, "platform", "p1"],
+        ["t2", "a@x.com", "opus", 6.0, "platform", "p1"],
+        ["t3", "b@x.com", "sonnet", 1.5, "platform", "p2"]
+    ];
+    r = _pivot_user_model(cols, rows);
+    assert r["columns"] == ["user", "runs", "total_usd", "opus", "sonnet"];
+    assert r["rows"][0][0] == "a@x.com" and r["rows"][0][2] == 8.0;
+    assert r["rows"][1][0] == "b@x.com" and r["rows"][1][4] == 1.5;
+    assert r["rows"][1][3] is None;
+}
+test "pivot rejects input without the expected columns" {
+    r = _pivot_user_model(["x"], [["y"]]);
+    assert "error" in r;
+}
+
 test "report_checks flags a per-turn sum that misses the total" {
     r = Report(sections=[
         {"id": "a", "type": "tile", "title": "t", "md": "", "recipe": {"kind": "metric", "ref": "total_spend"}},
