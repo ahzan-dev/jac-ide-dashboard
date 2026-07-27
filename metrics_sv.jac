@@ -2494,6 +2494,63 @@ async def:priv user_360(user: str, env: str) -> dict {
     return out;
 }
 
+# Project 360 (P4) — drill-down for clickable project_id cells. Same shape as
+# user_360: summary + models + recent activity, one concurrent request.
+# NOTE: deploy events carry no project_id in telemetry, so deploy history per
+# project is honestly absent (stated in the panel).
+async def:priv project_360(project_id: str, env: str) -> dict {
+    env = _clamp_env(env);
+    pid = re.sub(r"[^A-Za-z0-9_-]", "", project_id.strip());
+    empty = {"project": project_id, "window": "last 30 days", "error": "",
+             "summary": {"columns": [], "rows": []}, "models": {"columns": [], "rows": []},
+             "timeline": {"columns": [], "rows": []}};
+    if not pid {
+        empty["error"] = "bad project id";
+        return empty;
+    }
+    ef = env_filter(env);
+    win = "AND timestamp > now() - INTERVAL 30 DAY";
+    pp = "toString(properties.project_id) = '" + pid + "'";
+    q_summary = ("SELECT coalesce(nullIf(toString(any(person.properties.email)),''),"
+        + " nullIf(toString(any(person.properties.display_name)),''),"
+        + " nullIf(toString(any(person.properties.name)),''), 'unknown') owner,"
+        + " uniq(person_id) users,"
+        + " countIf(event='ai_message_sent') ai_sent, countIf(event='ai_message_completed') ai_done,"
+        + " countIf(event='ai_message_failed') ai_failed,"
+        + " countIf(event='ai_generation_metered') cost_runs,"
+        + " round(sumIf(toFloat64OrNull(toString(properties.cost_usd)), event='ai_generation_metered'),2) cost_usd,"
+        + " countIf(event='preview_start_requested') previews_requested,"
+        + " substring(toString(min(timestamp)),1,16) first_activity,"
+        + " substring(toString(max(timestamp)),1,16) last_activity"
+        + " FROM events WHERE " + pp + " " + ef + " " + win);
+    q_models = ("SELECT coalesce(nullIf(toString(properties.model),''),'(blank)') model, count() runs,"
+        + " round(sum(toFloat64OrNull(toString(properties.cost_usd))),2) total_usd"
+        + " FROM events WHERE event='ai_generation_metered' AND " + pp + " " + ef + " " + win
+        + " GROUP BY model ORDER BY total_usd DESC LIMIT 10");
+    q_timeline = ("SELECT substring(toString(timestamp),1,16) ts, event,"
+        + " coalesce(nullIf(toString(properties.model),''), nullIf(toString(properties.reason),''), '') detail"
+        + " FROM events WHERE " + pp + " " + ef + " " + win
+        + " ORDER BY timestamp DESC LIMIT 40");
+    results = await asyncio.gather(
+        asyncio.to_thread(run_hogql, q_summary),
+        asyncio.to_thread(run_hogql, q_models),
+        asyncio.to_thread(run_hogql, q_timeline)
+    );
+    labels = ["summary", "models", "timeline"];
+    i = 0;
+    for res in results {
+        rd = res as dict;
+        if "error" in rd {
+            empty["error"] = str(rd["error"])[:120];
+        } else {
+            empty[labels[i]] = {"columns": rd["columns"], "rows": rd["results"]};
+        }
+        i = i + 1;
+    }
+    empty["project"] = pid;
+    return empty;
+}
+
 # ---------------------------------------------------------------------------
 # Event-usage map for the data dictionary — which registry metrics reference
 # each event, derived live from METRICS so the dictionary can't silently drift.
