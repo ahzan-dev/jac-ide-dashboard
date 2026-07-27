@@ -240,7 +240,17 @@ def run_hogql(sql: str) -> dict {
 
 def env_expr(env: str) -> str {
     if env == "prod" {
-        return "(properties.environment = 'prod' OR properties.$host IN ('jachammer.ai','www.jachammer.ai','jac-builder.jaseci.org'))";
+        # HARDENED 2026-07-27 (deliberate decision): prod = jachammer.ai ONLY.
+        # Two clauses, both load-bearing:
+        #   1. client events: strictly $host = 'jachammer.ai' (env-prop tagging is
+        #      live on prod now, but host is the stricter, unspoofable-by-config cut)
+        #   2. server-emitted events (cost/signups/upgrades/money-loop) carry NO
+        #      $host — they are admitted by environment='prod' with an EMPTY host.
+        #      Dropping this clause silently zeroes every money metric.
+        # Dropped: www.jachammer.ai (zero events ever) and jac-builder.jaseci.org
+        # (old domain, dead since 2026-06-08 — trends before that date now read
+        # empty; accepted knowingly).
+        return "(properties.$host = 'jachammer.ai' OR (coalesce(toString(properties.$host),'') = '' AND properties.environment = 'prod'))";
     }
     if env == "dev" {
         return "(properties.environment = 'dev' OR properties.$host = 'jac-builder-dev.jaseci.org')";

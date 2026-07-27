@@ -11,10 +11,14 @@ Internal, read-only analytics cockpit. Full-stack Jac app. Reads PostHog via ser
   `.cl.jac` file, client bundle, or Vite define. Client → `/function/metric` walker → PostHog. Never client → PostHog.
 - **Every HogQL query injects the environment filter** (`env_filter()` in `metrics_sv.jac`, default `prod`).
   One PostHog project ingests prod+dev+preview+local; unfiltered numbers are ~80% noise.
-- **`prod` is NOT identifiable by the `environment` super-property** — prod does not emit it yet (only
-  local/preview/dev do). So `env_filter('prod')` matches `environment='prod'` **OR a `$host` allowlist**
-  (`jachammer.ai`, `www.jachammer.ai`, `jac-builder.jaseci.org`). This is spec §3.1 rule-1 fallback and is
-  load-bearing — without it prod returns 0.
+- **prod filter HARDENED 2026-07-27 (deliberate decision): jachammer.ai ONLY.** `env_filter('prod')` =
+  `$host = 'jachammer.ai'` **OR** (`$host` empty **AND** `environment='prod'`). The second clause is
+  load-bearing: server-emitted events (ai_generation_metered, auth_signup_succeeded, upgrade/money-loop)
+  carry NO `$host` — a host-only filter silently zeroes every cost/signup/revenue metric. Env tagging is
+  now LIVE on prod (D-14 shipped). Dropped knowingly: `www.jachammer.ai` (zero events ever) and
+  `jac-builder.jaseci.org` (old domain, dead since 2026-06-08 — trends before that date read empty).
+  **After changing this filter, flush dash-redis** — cached results (24h stale retention) were computed
+  with the old filter.
 - Honest tiles: each carries its exact definition, window, and small-N/proxy caveat.
 - HogQL: presence = `coalesce(toString(properties.X),'') != ''`; numbers = `toFloat64OrNull(toString(...))`.
 
