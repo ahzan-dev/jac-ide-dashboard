@@ -6,8 +6,8 @@ import from ..dash.ChartTiles { AreaTile, DonutTile, FunnelTile, RetentionTile, 
 glob USERS_KEYS: list = [
     "new_signups", "activation",
     "active_weekly", "returning_weekly", "signup_method",
-    "funnel", "retention", "churn_risk"
-, "acquisition_channel"];
+    "funnel", "retention", "churn_risk",
+    "acquisition_channel", "signup_trigger_breakdown"];
 
 def:pub UsersPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxElement {
     has data: dict = {};
@@ -51,5 +51,6 @@ def:pub UsersPage(env: str, date_from: str, date_to: str, refresh_n: int) -> Jsx
         <div className="col-span-12 lg:col-span-5"><RetentionTile title="Retention over time" data={data["retention"]} loading={loading} /></div>
         <div className="col-span-12 lg:col-span-3"><StatTile title="Accounts at risk (60 days)" data={data["churn_risk"]} loading={loading} /></div>
         <div className="col-span-12 lg:col-span-6"><BarsTile title="Signups by channel" data={data["acquisition_channel"]} loading={loading} /></div>
+        <div className="col-span-12 lg:col-span-6"><BarsTile title="Signups by trigger" data={data["signup_trigger_breakdown"]} loading={loading} /></div>
     </div>;
 }

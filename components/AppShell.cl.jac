@@ -2,7 +2,7 @@ sv import from ..metrics_sv { scope_count, window_list }
 import from "@hugeicons/react" { HugeiconsIcon }
 import from "@hugeicons/core-free-icons" {
     DashboardSquare01Icon, UserGroupIcon, UserMultiple02Icon, Message01Icon, CheckmarkBadge01Icon,
-    Analytics01Icon, PuzzleIcon, DollarCircleIcon, Rocket01Icon, Pulse01Icon,
+    Analytics01Icon, PuzzleIcon, DollarCircleIcon, CoinsDollarIcon, Rocket01Icon, Pulse01Icon,
     Comment01Icon, SparklesIcon, PinIcon, File01Icon, Settings01Icon
 }
 import from .ui.sidebar {
@@ -28,6 +28,7 @@ import from .pages.QualityPage { QualityPage }
 import from .pages.FeedbackPage { FeedbackPage }
 import from .pages.ImpactPage { ImpactPage }
 import from .pages.CostPage { CostPage }
+import from .pages.RevenuePage { RevenuePage }
 import from .pages.SettingsPage { SettingsPage }
 import from .dash.DateRangePicker { DateRangePicker }
 import from .dash.SavedViews { SavedViews }
@@ -47,6 +48,7 @@ glob NAV: list = [
         {"label": "Advanced Analytics", "page": "advanced", "icon": Analytics01Icon},
         {"label": "Feature Usage", "page": "features", "icon": PuzzleIcon},
         {"label": "Cost & Usage", "page": "cost", "icon": DollarCircleIcon},
+        {"label": "Revenue", "page": "revenue", "icon": CoinsDollarIcon},
         {"label": "Developer Impact", "page": "impact", "icon": Rocket01Icon},
         {"label": "System Health", "page": "health", "icon": Pulse01Icon},
         {"label": "Feedback & Roadmap", "page": "feedback", "icon": Comment01Icon}
@@ -66,7 +68,7 @@ glob PAGE_TITLES: dict = {
     "ask": "Ask (AI builder)", "pinned": "My Dashboard", "reports": "Reports", "directory": "Users directory",
     "overview": "Overview", "users": "Users & Adoption", "features": "Feature Usage",
     "feedback": "Feedback & Roadmap", "requests": "AI Requests", "quality": "AI Quality",
-    "advanced": "Advanced Analytics", "impact": "Developer Impact", "cost": "Cost & Usage",
+    "advanced": "Advanced Analytics", "impact": "Developer Impact", "cost": "Cost & Usage", "revenue": "Revenue",
     "health": "System Health", "settings": "Settings & Data"
 };
 
@@ -346,6 +348,8 @@ def:pub AppShell(on_logout: Callable[[], None]) -> JsxElement {
                         <ImpactPage env={env} date_from={date_from} date_to={date_to} refresh_n={refresh_n} />
                     } elif active_page == "cost" {
                         <CostPage env={env} date_from={date_from} date_to={date_to} refresh_n={refresh_n} />
+                    } elif active_page == "revenue" {
+                        <RevenuePage env={env} date_from={date_from} date_to={date_to} refresh_n={refresh_n} />
                     } else {
                         <SettingsPage env={env} date_from={date_from} date_to={date_to} refresh_n={refresh_n} />
                     }}

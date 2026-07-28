@@ -1,3 +1,4 @@
+sv import from ...metrics_sv { pin_add }
 import from ..ui.card { Card, CardHeader, CardTitle, CardDescription, CardContent }
 import from ..ui.skeleton { Skeleton }
 import from ..ui.tooltip { Tooltip, TooltipTrigger, TooltipContent }
@@ -35,7 +36,28 @@ def _err(data: any) -> str {
 }
 
 # ---- shared card frame -----------------------------------------------------
-def Frame(title: str, data: any, children: any = None) -> JsxElement {
+# Every registry-backed tile is pinnable for free: the server stamps meta.key,
+# the 📌 pins {kind:"metric", ref:key} and My Dashboard re-runs it live via
+# run_pinned. pinnable={False} suppresses it (DynamicTile has its own pin flow).
+def Frame(title: str, data: any, children: any = None, pinnable: bool = True) -> JsxElement {
+    has pinned: bool = False;
+
+    m0 = (data["meta"] if data else None) as dict | None;
+    mkey = str(m0.get("key", "") or "") if m0 else "";
+
+    async def do_pin -> None {
+        try {
+            recipe = {"kind": "metric", "ref": mkey, "title": title, "chart": "auto", "good_up": True};
+            await pin_add(recipe);
+        } except Exception {
+            return;
+        }
+    }
+    def on_pin(e: MouseEvent) {
+        pinned = True;
+        do_pin();
+    }
+
     return <Card className="flex h-full w-full flex-col">
         <CardHeader className="pb-2">
             <div className="flex items-center gap-1.5">
@@ -44,6 +66,9 @@ def Frame(title: str, data: any, children: any = None) -> JsxElement {
                     <TooltipTrigger className="grid size-4 place-items-center rounded-full border border-border text-[10px] leading-none text-muted-foreground">?</TooltipTrigger>
                     <TooltipContent className="max-w-xs">{_def(data)}</TooltipContent>
                 </Tooltip>
+                {if pinnable and (mkey != "") {
+                    <button className="ml-auto shrink-0 text-xs text-muted-foreground opacity-60 hover:opacity-100 disabled:opacity-100" onClick={on_pin} disabled={pinned} title="Pin to My Dashboard">{"📌✓" if pinned else "📌"}</button>
+                }}
             </div>
             {if _win(data) {
                 <CardDescription className="text-sm">{_win(data)}</CardDescription>
@@ -62,10 +87,10 @@ def Frame(title: str, data: any, children: any = None) -> JsxElement {
 }
 
 # ============================ Line chart tile ==============================
-def:pub LineTile(title: str, data: any, loading: bool) -> JsxElement {
+def:pub LineTile(title: str, data: any, loading: bool, pinnable: bool = True) -> JsxElement {
     series = (data["series"] as list) if data else [];
     annots = annots_for(series);
-    return <Frame title={title} data={data}>
+    return <Frame title={title} data={data} pinnable={pinnable}>
         {if loading {
             <Skeleton className="h-40 w-full" />
         } else {
@@ -86,10 +111,10 @@ def:pub LineTile(title: str, data: any, loading: bool) -> JsxElement {
 }
 
 # ============================ Area chart tile (volume trend) ==============
-def:pub AreaTile(title: str, data: any, loading: bool) -> JsxElement {
+def:pub AreaTile(title: str, data: any, loading: bool, pinnable: bool = True) -> JsxElement {
     series = (data["series"] as list) if data else [];
     annots = annots_for(series);
-    return <Frame title={title} data={data}>
+    return <Frame title={title} data={data} pinnable={pinnable}>
         {if loading {
             <Skeleton className="h-40 w-full" />
         } else {
@@ -112,7 +137,7 @@ def:pub AreaTile(title: str, data: any, loading: bool) -> JsxElement {
 # ============================ Meter tile (single ratio) ===================
 # dataviz canonical form for "a single ratio against a limit": a same-ramp track
 # (robust; recharts 3 radial-gauge scaling is unreliable).
-def:pub GaugeTile(title: str, data: any, loading: bool) -> JsxElement {
+def:pub GaugeTile(title: str, data: any, loading: bool, pinnable: bool = True) -> JsxElement {
     val = data["value"] if data else None;
     m = data["meta"] if data else None;
     good_up = (m["good_when_up"] as bool) if m else True;
@@ -123,7 +148,7 @@ def:pub GaugeTile(title: str, data: any, loading: bool) -> JsxElement {
         if v < 0.0 { v = 0.0; }
         if v > 100.0 { v = 100.0; }
     }
-    return <Frame title={title} data={data}>
+    return <Frame title={title} data={data} pinnable={pinnable}>
         {if loading {
             <Skeleton className="h-24 w-full" />
         } else {
@@ -145,7 +170,7 @@ def:pub GaugeTile(title: str, data: any, loading: bool) -> JsxElement {
 }
 
 # ============================ Donut tile (composition) ====================
-def:pub DonutTile(title: str, data: any, loading: bool) -> JsxElement {
+def:pub DonutTile(title: str, data: any, loading: bool, pinnable: bool = True) -> JsxElement {
     raw = (data["rows"] as list) if (data and (not loading)) else [];
     pdata = [];
     i = 0;
@@ -153,7 +178,7 @@ def:pub DonutTile(title: str, data: any, loading: bool) -> JsxElement {
         pdata = pdata + [{"name": str(r[0]), "value": (r[1] as float), "fill": VIZ[i % 6]}];
         i = i + 1;
     }
-    return <Frame title={title} data={data}>
+    return <Frame title={title} data={data} pinnable={pinnable}>
         {if loading {
             <Skeleton className="h-40 w-full" />
         } else {
@@ -185,7 +210,7 @@ def:pub DonutTile(title: str, data: any, loading: bool) -> JsxElement {
 }
 
 # ============================ Stacked bar tile (multi-series) =============
-def:pub StackBarTile(title: str, data: any, loading: bool) -> JsxElement {
+def:pub StackBarTile(title: str, data: any, loading: bool, pinnable: bool = True) -> JsxElement {
     cols = (data["columns"] as list) if (data and (not loading)) else [];
     raw = (data["rows"] as list) if (data and (not loading)) else [];
 
@@ -211,7 +236,7 @@ def:pub StackBarTile(title: str, data: any, loading: bool) -> JsxElement {
         cdata = cdata + [pt];
     }
 
-    return <Frame title={title} data={data}>
+    return <Frame title={title} data={data} pinnable={pinnable}>
         {if loading {
             <Skeleton className="h-44 w-full" />
         } else {
@@ -240,10 +265,75 @@ def:pub StackBarTile(title: str, data: any, loading: bool) -> JsxElement {
     </Frame>;
 }
 
+# ============================ Multi-line tile (few named series) ==========
+# Input = LONG-form rows [bucket, name, value] (e.g. feature_weekly). Pivoted
+# here into wide recharts data; series order = first appearance (server sends
+# value DESC within each bucket, so the biggest series claims --viz-1).
+def:pub MultiLineTile(title: str, data: any, loading: bool, pinnable: bool = True) -> JsxElement {
+    raw = (data["rows"] as list) if (data and (not loading)) else [];
+
+    names = [];
+    for r0 in raw {
+        nm0 = str((r0 as list)[1]);
+        if nm0 not in names {
+            names = names + [nm0];
+        }
+    }
+    lines = [];
+    ni = 0;
+    for nm in names {
+        lines = lines + [{"name": nm, "color": VIZ[ni % 6]}];
+        ni = ni + 1;
+    }
+    xs = [];
+    byx: dict = {};
+    for r1 in raw {
+        rl = r1 as list;
+        x = str(rl[0]);
+        if x not in byx {
+            byx[x] = {"x": x};
+            xs = xs + [x];
+        }
+        (byx[x] as dict)[str(rl[1])] = rl[2];
+    }
+    cdata = [];
+    for x2 in xs {
+        cdata = cdata + [byx[x2]];
+    }
+
+    return <Frame title={title} data={data} pinnable={pinnable}>
+        {if loading {
+            <Skeleton className="h-44 w-full" />
+        } else {
+            <div className="flex flex-col gap-2">
+                <ChartContainer config={{}} className="aspect-auto h-44 w-full">
+                    <LineChart data={cdata} margin={{"top": 8, "right": 8, "bottom": 0, "left": -6}}>
+                        <CartesianGrid vertical={False} strokeDasharray="3 3" />
+                        <XAxis dataKey="x" tickLine={False} axisLine={False} minTickGap={28} fontSize={11} tickFormatter={short_date} />
+                        <YAxis tickLine={False} axisLine={False} width={40} fontSize={11} />
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                        {for l in lines {
+                            <Line key={l["name"]} dataKey={l["name"]} type="monotone" stroke={l["color"]} strokeWidth={2} dot={False} />
+                        }}
+                    </LineChart>
+                </ChartContainer>
+                <div className="flex flex-wrap justify-center gap-x-3 gap-y-1">
+                    {for l in lines {
+                        <div key={l["name"]} className="flex items-center gap-1.5 text-xs">
+                            <span className="size-2 rounded-full" style={{"backgroundColor": l["color"]}}></span>
+                            <span className="text-muted-foreground">{l["name"]}</span>
+                        </div>
+                    }}
+                </div>
+            </div>
+        }}
+    </Frame>;
+}
+
 # ============================ Vertical bar chart tile =====================
-def:pub VBarTile(title: str, data: any, loading: bool) -> JsxElement {
+def:pub VBarTile(title: str, data: any, loading: bool, pinnable: bool = True) -> JsxElement {
     series = (data["series"] as list) if data else [];
-    return <Frame title={title} data={data}>
+    return <Frame title={title} data={data} pinnable={pinnable}>
         {if loading {
             <Skeleton className="h-40 w-full" />
         } else {
@@ -264,7 +354,7 @@ def:pub VBarTile(title: str, data: any, loading: bool) -> JsxElement {
 # Thin wrapper: Frame chrome + DataTable (search / sort / pagination — see
 # components/dash/DataTable.cl.jac). Same API as always, so every table tile
 # (report tables, feature table, dynamic Ask tables) gets the features for free.
-def:pub TableTile(title: str, data: any, loading: bool) -> JsxElement {
+def:pub TableTile(title: str, data: any, loading: bool, pinnable: bool = True) -> JsxElement {
     cols = (data["columns"] as list) if (data and (not loading)) else [];
     raw = (data["rows"] as list) if (data and (not loading)) else [];
     env = "prod";
@@ -272,7 +362,7 @@ def:pub TableTile(title: str, data: any, loading: bool) -> JsxElement {
         env = str(((data["meta"] if data["meta"] else {}) as dict).get("env", "prod"));
     }
 
-    return <Frame title={title} data={data}>
+    return <Frame title={title} data={data} pinnable={pinnable}>
         {if loading {
             <Skeleton className="h-40 w-full" />
         } else {
@@ -314,14 +404,14 @@ def:pub StaticStat(title: str, value: str, note: str, definition: str) -> JsxEle
 }
 
 # ============================ Horizontal bars tile =========================
-def:pub BarsTile(title: str, data: any, loading: bool) -> JsxElement {
+def:pub BarsTile(title: str, data: any, loading: bool, pinnable: bool = True) -> JsxElement {
     rows = (data["rows"] as list) if data else [];
     maxv = 1.0;
     for r in rows {
         rv = r[1] as float;
         if rv > maxv { maxv = rv; }
     }
-    return <Frame title={title} data={data}>
+    return <Frame title={title} data={data} pinnable={pinnable}>
         {if loading {
             <Skeleton className="h-40 w-full" />
         } else {
@@ -344,10 +434,10 @@ def:pub BarsTile(title: str, data: any, loading: bool) -> JsxElement {
 }
 
 # ============================ Funnel tile ==================================
-def:pub FunnelTile(title: str, data: any, loading: bool) -> JsxElement {
+def:pub FunnelTile(title: str, data: any, loading: bool, pinnable: bool = True) -> JsxElement {
     rows = (data["rows"] as list) if data else [];
     first = (rows[0][1] as float) if rows else 0.0;
-    return <Frame title={title} data={data}>
+    return <Frame title={title} data={data} pinnable={pinnable}>
         {if loading {
             <Skeleton className="h-40 w-full" />
         } else {
@@ -367,10 +457,10 @@ def:pub FunnelTile(title: str, data: any, loading: bool) -> JsxElement {
 }
 
 # ============================ Retention heatmap tile =======================
-def:pub RetentionTile(title: str, data: any, loading: bool) -> JsxElement {
+def:pub RetentionTile(title: str, data: any, loading: bool, pinnable: bool = True) -> JsxElement {
     rows = (data["rows"] as list) if data else [];
     weeks = [0, 1, 2, 3, 4, 5];
-    return <Frame title={title} data={data}>
+    return <Frame title={title} data={data} pinnable={pinnable}>
         {if loading {
             <Skeleton className="h-40 w-full" />
         } else {

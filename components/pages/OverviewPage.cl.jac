@@ -1,7 +1,7 @@
 sv import from ...metrics_sv { metrics_batch }
 import from ..dash.util { cache_key, cache_get, cache_put, cacheable, inflight_start, inflight_end }
 import from ..dash.StatTile { StatTile }
-import from ..dash.ChartTiles { LineTile, AreaTile, BarsTile, FunnelTile, RetentionTile, GaugeTile }
+import from ..dash.ChartTiles { LineTile, AreaTile, BarsTile, FunnelTile, GaugeTile, Banner }
 
 glob OVERVIEW_KEYS: list = [
     "active_builders", "ai_requests", "median_response", "code_produced",
@@ -54,5 +54,7 @@ def:pub OverviewPage(env: str, date_from: str, date_to: str, refresh_n: int) -> 
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><LineTile title="AI success rate over time" data={data["gen_success_weekly"]} loading={loading} /></div>
 
         <div className="col-span-12 lg:col-span-5"><FunnelTile title="New-user journey" data={data["funnel"]} loading={loading} /></div>
+
+        <div className="col-span-12"><Banner text="'Production' here = traffic on jachammer.ai (plus env-tagged server events) — dev/preview/local noise is filtered out of every tile. KPI ±% badges compare against the previous equal-length window; the funnel is a true funnel (each step requires all prior steps)." /></div>
     </div>;
 }

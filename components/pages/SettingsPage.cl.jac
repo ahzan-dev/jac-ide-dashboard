@@ -28,7 +28,7 @@ glob DATA_LINES: list = [
     "$host and environment are materialized (fast prod filtering)"
 ];
 glob ACCESS_LINES: list = [
-    "Admin email allowlist gates the whole app (internal only)",
+    "Login-gated: a single seeded admin account (JWT); no self-signup UI",
     "No user roles / RBAC model exists — admin vs everyone",
     "phx_ READ key is SERVER-ONLY; the browser calls walkers, never PostHog"
 ];

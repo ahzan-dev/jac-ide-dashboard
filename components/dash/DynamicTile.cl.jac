@@ -10,37 +10,37 @@ import from .ChartTiles {
 def:pub DynamicTile(chart: str, title: str, data: any, loading: bool) -> JsxElement {
     if chart == "compare" {
         # a single number vs a comparison period → StatTile (shows value + ±% delta badge)
-        return <StatTile title={title} data={data} loading={loading} />;
+        return <StatTile title={title} data={data} loading={loading} pinnable={False} />;
     }
     if chart == "gauge" {
-        return <GaugeTile title={title} data={data} loading={loading} />;
+        return <GaugeTile title={title} data={data} loading={loading} pinnable={False} />;
     }
     if chart == "area" {
-        return <AreaTile title={title} data={data} loading={loading} />;
+        return <AreaTile title={title} data={data} loading={loading} pinnable={False} />;
     }
     if chart == "line" {
-        return <LineTile title={title} data={data} loading={loading} />;
+        return <LineTile title={title} data={data} loading={loading} pinnable={False} />;
     }
     if chart == "vbar" {
-        return <VBarTile title={title} data={data} loading={loading} />;
+        return <VBarTile title={title} data={data} loading={loading} pinnable={False} />;
     }
     if chart == "bars" {
-        return <BarsTile title={title} data={data} loading={loading} />;
+        return <BarsTile title={title} data={data} loading={loading} pinnable={False} />;
     }
     if chart == "donut" {
-        return <DonutTile title={title} data={data} loading={loading} />;
+        return <DonutTile title={title} data={data} loading={loading} pinnable={False} />;
     }
     if chart == "table" {
-        return <TableTile title={title} data={data} loading={loading} />;
+        return <TableTile title={title} data={data} loading={loading} pinnable={False} />;
     }
     if chart == "funnel" {
-        return <FunnelTile title={title} data={data} loading={loading} />;
+        return <FunnelTile title={title} data={data} loading={loading} pinnable={False} />;
     }
     if chart == "retention" {
-        return <RetentionTile title={title} data={data} loading={loading} />;
+        return <RetentionTile title={title} data={data} loading={loading} pinnable={False} />;
     }
     if chart == "stackbar" {
-        return <StackBarTile title={title} data={data} loading={loading} />;
+        return <StackBarTile title={title} data={data} loading={loading} pinnable={False} />;
     }
-    return <StatTile title={title} data={data} loading={loading} />;
+    return <StatTile title={title} data={data} loading={loading} pinnable={False} />;
 }

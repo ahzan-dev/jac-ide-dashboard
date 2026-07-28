@@ -38,10 +38,11 @@ def:pub AdvancedPage(env: str, date_from: str, date_to: str, refresh_n: int) -> 
     }
 
     return <div className="grid grid-cols-12 gap-4">
-        <div className="col-span-12"><Banner text="This page uses simple rule-based checks (like 'more than usual' or 'less than usual'), not machine learning. We can't analyze what users actually type to the AI, because we never store that text — it's kept private by design." /></div>
+        <div className="col-span-12"><Banner text="This page uses simple rule-based checks (like 'more than usual' or 'less than usual'), not machine learning. Prompt text is never analyzed here: a transcript-capture path exists in code but is switched off in production (JAC_STORE_AI_TRANSCRIPTS unset), so nothing users type is stored." /></div>
 
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Accounts at risk (60 days)" data={data["churn_risk"]} loading={loading} /></div>
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Normal daily AI usage" data={data["ai_baseline"]} loading={loading} /></div>
+        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Undo rate" data={data["revert_rate"]} loading={loading} /></div>
 
         <div className="col-span-12 lg:col-span-8"><StackBarTile title="User lifecycle" data={data["lifecycle"]} loading={loading} /></div>
 
@@ -50,6 +51,5 @@ def:pub AdvancedPage(env: str, date_from: str, date_to: str, refresh_n: int) -> 
 
         <div className="col-span-12"><InsightsBox data={data} loading={loading} /></div>
         <div className="col-span-12"><HogqlBox /></div>
-        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Undo rate" data={data["revert_rate"]} loading={loading} /></div>
     </div>;
 }

@@ -1,45 +1,67 @@
-sv import from ...metrics_sv { event_usage }
+sv import from ...metrics_sv { event_usage, event_liveness }
 import from ..ui.card { Card, CardHeader, CardTitle, CardDescription, CardContent }
 import from ..ui.input { Input }
 import from ..ui.table { Table, TableHeader, TableBody, TableRow, TableHead, TableCell }
 import from ..ui.badge { Badge }
 
-# The CORE event contract (from .docs/posthog/EVENT_CATALOG.md). status: green live · yellow pending · red missing.
+# The CORE event contract (from .docs/posthog/EVENT_CATALOG.md).
+# Event rows carry NO hardcoded status — 🟢/🔴 is DERIVED from live prod counts
+# (event_liveness, last 14d) so the dictionary can't drift from reality again
+# (it used to mark ai_response_rated 🔴 while Feedback showed a live helpful rate).
+# Only the two non-event rows (super-prop / person-prop) keep a manual status.
 glob EVENTS: list = [
-    {"cat": "Acquisition", "event": "auth_signup_succeeded", "props": "method, source", "powers": "Signups, activation, retention cohort", "status": "🟢"},
-    {"cat": "Acquisition", "event": "auth_succeeded", "props": "method, is_new_user", "powers": "Active signed-in users", "status": "🟢"},
-    {"cat": "Acquisition", "event": "auth_sso_clicked", "props": "provider", "powers": "Channel / provider split", "status": "🟡"},
-    {"cat": "Activation", "event": "app_loaded", "props": "—", "powers": "Active-user heartbeat, time-spent", "status": "🟢"},
-    {"cat": "Activation", "event": "ide_opened", "props": "—", "powers": "WAU / returning / lifecycle", "status": "🟢"},
-    {"cat": "Activation", "event": "project_created", "props": "source", "powers": "Projects, activation funnel", "status": "🟢"},
-    {"cat": "AI engine", "event": "ai_message_sent", "props": "prompt_length, task_category, project_id", "powers": "Gen requested, funnel, task-mix", "status": "🟢"},
-    {"cat": "AI engine", "event": "ai_message_completed", "props": "duration_ms, files_changed, tool_call_count, response_length", "powers": "North Star, TTFV, gen-success, latency", "status": "🟢"},
-    {"cat": "AI engine", "event": "ai_message_failed", "props": "reason, at_phase, duration_ms", "powers": "Failure breakdown", "status": "🟢"},
-    {"cat": "AI engine", "event": "ai_user_aborted", "props": "duration_ms", "powers": "Give-up signal", "status": "🟢"},
-    {"cat": "AI engine", "event": "ai_message_reverted", "props": "—", "powers": "Acceptance signal (kept = not reverted)", "status": "🟢"},
-    {"cat": "AI engine", "event": "ai_response_rated", "props": "rating, message_id, files_changed", "powers": "AI Quality: helpful-rate, quality-by-model", "status": "🔴"},
-    {"cat": "AI engine", "event": "ai_issue_reported", "props": "category, message_id", "powers": "Feedback / roadmap signal", "status": "🔴"},
-    {"cat": "Preview", "event": "preview_start_requested", "props": "was_prepared", "powers": "Reliability denominator", "status": "🟢"},
-    {"cat": "Preview", "event": "preview_ready", "props": "duration_ms", "powers": "North Star, reliability numerator", "status": "🟢"},
-    {"cat": "Preview", "event": "preview_start_failed", "props": "reason, phase", "powers": "Reliability failures", "status": "🟢"},
-    {"cat": "Deploy", "event": "deploy_sandbox_clicked", "props": "—", "powers": "Deploy intent", "status": "🟢"},
-    {"cat": "Deploy", "event": "deploy_sandbox_succeeded", "props": "status", "powers": "Deploy success (sandbox)", "status": "🟡"},
-    {"cat": "Deploy", "event": "deploy_production_clicked", "props": "has_subdomain, has_domain, has_cert_email", "powers": "Deploy intent (production)", "status": "🟢"},
-    {"cat": "Deploy", "event": "deploy_production_succeeded", "props": "status, has_custom_domain", "powers": "Deploy success (production)", "status": "🟡"},
-    {"cat": "Monetization", "event": "upgrade_checkout_clicked", "props": "plan", "powers": "Upgrade intent (leading revenue)", "status": "🟢"},
-    {"cat": "Monetization", "event": "topup_checkout_clicked", "props": "pack", "powers": "Top-up intent", "status": "🟢"},
-    {"cat": "Cost", "event": "ai_generation_metered", "props": "cost_usd, model, project_id, run_id", "powers": "Inference spend, cost/gen, margin (server-side)", "status": "🟡"},
-    {"cat": "Feature", "event": "git_commit_succeeded", "props": "—", "powers": "Git adoption", "status": "🟢"},
-    {"cat": "Feature", "event": "github_connect_succeeded", "props": "—", "powers": "GitHub adoption", "status": "🟢"},
-    {"cat": "Feature", "event": "project_shared", "props": "—", "powers": "Community / share adoption", "status": "🟢"},
-    {"cat": "Feature", "event": "export_downloaded", "props": "—", "powers": "Export adoption, churn-risk cohort", "status": "🟢"},
-    {"cat": "Super-prop", "event": "environment", "props": "prod / dev / preview / local", "powers": "The env filter on EVERY query", "status": "🟡"},
-    {"cat": "Person", "event": "plan", "props": "free / builder / pro", "powers": "Tier segment on every chart", "status": "🟡"}
+    {"cat": "Acquisition", "event": "auth_signup_succeeded", "props": "method, source, signup_trigger", "powers": "Signups, activation, retention cohort, trigger breakdown"},
+    {"cat": "Acquisition", "event": "auth_succeeded", "props": "method, is_new_user", "powers": "Active signed-in users"},
+    {"cat": "Acquisition", "event": "auth_sso_clicked", "props": "provider", "powers": "Channel / provider split"},
+    {"cat": "Activation", "event": "app_loaded", "props": "—", "powers": "Active-user heartbeat, time-spent"},
+    {"cat": "Activation", "event": "ide_opened", "props": "—", "powers": "WAU / returning / lifecycle"},
+    {"cat": "Activation", "event": "ide_session_ended", "props": "duration_active_ms", "powers": "Typical session length (focused time)"},
+    {"cat": "Activation", "event": "project_created", "props": "source", "powers": "Projects, activation funnel"},
+    {"cat": "AI engine", "event": "ai_message_sent", "props": "prompt_length, task_category, project_id, conversation_id, turn_number", "powers": "Gen requested, funnel, task-mix"},
+    {"cat": "AI engine", "event": "ai_message_completed", "props": "duration_ms, files_changed, model, conversation_id, turn_number", "powers": "North Star, TTFV, gen-success, latency, model mix, first-try"},
+    {"cat": "AI engine", "event": "ai_message_failed", "props": "reason, at_phase, duration_ms", "powers": "Failure breakdown"},
+    {"cat": "AI engine", "event": "ai_user_aborted", "props": "duration_ms", "powers": "Give-up signal"},
+    {"cat": "AI engine", "event": "ai_message_reverted", "props": "—", "powers": "Acceptance signal (kept = not reverted)"},
+    {"cat": "AI engine", "event": "ai_message_blocked_quota", "props": "—", "powers": "Quota friction (issues log)"},
+    {"cat": "AI engine", "event": "ai_response_rated", "props": "rating, message_id, files_changed", "powers": "AI Quality: helpful-rate, ratings trend"},
+    {"cat": "AI engine", "event": "ai_response_edited", "props": "—", "powers": "Manual-edit acceptance signal (Impact)"},
+    {"cat": "AI engine", "event": "ai_issue_reported", "props": "category, message_id", "powers": "Feedback / roadmap signal"},
+    {"cat": "AI engine", "event": "ai_turn_transcript", "props": "prompt, response", "powers": "Transcript analytics — flag-gated (JAC_STORE_AI_TRANSCRIPTS unset on prod)"},
+    {"cat": "Preview", "event": "preview_start_requested", "props": "was_prepared", "powers": "Reliability denominator"},
+    {"cat": "Preview", "event": "preview_ready", "props": "duration_ms", "powers": "North Star, reliability numerator"},
+    {"cat": "Preview", "event": "preview_start_failed", "props": "reason, phase", "powers": "Reliability failures"},
+    {"cat": "Deploy", "event": "deploy_sandbox_clicked", "props": "—", "powers": "Deploy intent"},
+    {"cat": "Deploy", "event": "deploy_sandbox_succeeded", "props": "status", "powers": "Deploy success (sandbox)"},
+    {"cat": "Deploy", "event": "deploy_sandbox_failed", "props": "reason", "powers": "Deploy failures (sandbox)"},
+    {"cat": "Deploy", "event": "deploy_production_clicked", "props": "has_subdomain, has_domain, has_cert_email", "powers": "Deploy intent (production)"},
+    {"cat": "Deploy", "event": "deploy_production_succeeded", "props": "status, has_custom_domain", "powers": "Deploy success (production)"},
+    {"cat": "Deploy", "event": "deploy_production_failed", "props": "reason", "powers": "Deploy failures (production)"},
+    {"cat": "Monetization", "event": "upgrade_checkout_clicked", "props": "plan", "powers": "Upgrade intent (leading revenue)"},
+    {"cat": "Monetization", "event": "upgrade_checkout_succeeded", "props": "plan, plan_from, interval, amount_usd, is_first_upgrade", "powers": "Paid conversions, upgrade revenue (Revenue page)"},
+    {"cat": "Monetization", "event": "upgrade_checkout_failed", "props": "reason", "powers": "Checkout friction (issues log)"},
+    {"cat": "Monetization", "event": "topup_checkout_clicked", "props": "pack", "powers": "Top-up intent"},
+    {"cat": "Monetization", "event": "topup_checkout_succeeded", "props": "pack, amount_usd", "powers": "Top-up revenue"},
+    {"cat": "Monetization", "event": "subscription_canceled", "props": "mrr_delta", "powers": "MRR churn (blocked until this ships)"},
+    {"cat": "Monetization", "event": "subscription_downgraded", "props": "plan, plan_from", "powers": "Downgrade signal"},
+    {"cat": "Cost", "event": "ai_generation_metered", "props": "cost_usd, model, project_id, run_id, byok", "powers": "Inference spend, cost/gen, margin (server-side)"},
+    {"cat": "Feature", "event": "git_commit_succeeded", "props": "—", "powers": "Git adoption"},
+    {"cat": "Feature", "event": "github_connect_succeeded", "props": "—", "powers": "GitHub adoption"},
+    {"cat": "Feature", "event": "project_shared", "props": "—", "powers": "Community / share adoption"},
+    {"cat": "Feature", "event": "export_downloaded", "props": "—", "powers": "Export adoption, churn-risk cohort"}
+];
+
+# Non-event rows — properties can't be liveness-probed by event name, so these
+# keep a manual status (env tagging shipped to prod 2026-07 → 🟢).
+glob PROP_ROWS: list = [
+    {"cat": "Super-prop", "event": "environment", "props": "prod / dev / preview / local", "powers": "The env filter on EVERY query", "status": "🟢"},
+    {"cat": "Person", "event": "plan", "props": "free / builder / pro", "powers": "Tier segment on every chart", "status": "🟢"}
 ];
 
 def:pub DataDictionary() -> JsxElement {
     has query: str = "";
     has usage: dict = {};
+    has live: dict = {};
+    has live_err: bool = False;
 
     async can with entry {
         names = [];
@@ -49,6 +71,14 @@ def:pub DataDictionary() -> JsxElement {
         res = await event_usage(names);
         if res {
             usage = res as dict;
+        }
+        lv = await event_liveness(names);
+        lvd = lv as dict;
+        if "error" in lvd {
+            live_err = True;
+        }
+        if "counts" in lvd {
+            live = lvd["counts"] as dict;
         }
     }
 
@@ -63,16 +93,28 @@ def:pub DataDictionary() -> JsxElement {
         if (not q) or (q in blob) {
             cnt = len(usage.get(str(ev["event"]), []) as list);
             mtxt = "—" if cnt == 0 else str(cnt);
-            row = {"cat": ev["cat"], "event": ev["event"], "props": ev["props"], "powers": ev["powers"], "status": ev["status"], "nmetrics": cnt, "mtxt": mtxt};
+            n14 = (live.get(str(ev["event"]), 0) or 0) as int;
+            status = "…";
+            if live_err {
+                status = "?";
+            } elif live {
+                status = "🟢" if n14 > 0 else "🔴";
+            }
+            row = {"cat": ev["cat"], "event": ev["event"], "props": ev["props"], "powers": ev["powers"], "status": status, "n14": n14, "mtxt": mtxt};
             rows = rows + [row];
         }
     }
+    for pv in PROP_ROWS {
+        blob2 = (str(pv["event"]) + " " + str(pv["cat"]) + " " + str(pv["props"]) + " " + str(pv["powers"])).lower();
+        if (not q) or (q in blob2) {
+            rows = rows + [{"cat": pv["cat"], "event": pv["event"], "props": pv["props"], "powers": pv["powers"], "status": pv["status"], "n14": -1, "mtxt": "—"}];
+        }
+    }
 
-    # Derived, not hand-counted: the hardcoded "26" had silently drifted to 30
-    # actual rows. Built here in the body (JSX slots stay trivial).
+    # Derived, not hand-counted. Status legend matches the derivation.
     caption = ("The " + str(len(EVENTS)) + " CORE events the dashboard depends on."
-        + " 🟢 live · 🟡 pending deploy/config · 🔴 not yet instrumented."
-        + " Full contract: .docs/posthog/EVENT_CATALOG.md."
+        + (" Status DERIVED live: 🟢 = seen in prod in the last 14 days · 🔴 = zero prod events (14d)." if not live_err else " Status probe unavailable right now (?).")
+        + " '14d' = prod event count behind the status. Full contract: .docs/posthog/EVENT_CATALOG.md."
         + " · 'Metrics' = live count of registry metrics using each event.");
 
     return <Card className="w-full">
@@ -91,6 +133,7 @@ def:pub DataDictionary() -> JsxElement {
                             <TableHead className="text-xs">Key properties</TableHead>
                             <TableHead className="text-xs">Powers</TableHead>
                             <TableHead className="text-center text-xs">Metrics</TableHead>
+                            <TableHead className="text-center text-xs">14d</TableHead>
                             <TableHead className="text-center text-xs">Status</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -105,6 +148,7 @@ def:pub DataDictionary() -> JsxElement {
                                 <TableCell className="text-xs text-muted-foreground">{str(ev["props"])}</TableCell>
                                 <TableCell className="text-xs text-muted-foreground">{str(ev["powers"])}</TableCell>
                                 <TableCell className="text-center text-xs tabular-nums">{str(ev["mtxt"])}</TableCell>
+                                <TableCell className="text-center text-xs tabular-nums">{"—" if (ev["n14"] as int) < 0 else str(ev["n14"])}</TableCell>
                                 <TableCell className="text-center text-xs">{str(ev["status"])}</TableCell>
                             </TableRow>
                         }}

@@ -207,8 +207,10 @@ test "parse_dt accepts date, datetime, and T-separator; rejects junk" {
 }
 test "norm_dt canonicalizes to seconds precision for toDateTime()" {
     d = _parse_dt("2026-07-26T17:00");
+    assert d is not None;
     assert _norm_dt(d) == "2026-07-26 17:00:00";
     d2 = _parse_dt("2026-07-26");
+    assert d2 is not None;
     assert _norm_dt(d2) == "2026-07-26 00:00:00";
 }
 test "bucket_span picks sub-day buckets for short windows, keeps the old ladder" {
@@ -380,4 +382,17 @@ test "report_checks flags a per-turn sum that misses the total" {
     r.snapshot["b"] = {"data": {"columns": ["ts", "user", "model", "cost_usd"], "rows": [["x", "u", "m", 300.0], ["y", "v", "m", 51.76]]}};
     checks2 = _report_checks(r);
     assert checks2[0]["ok"] == True;
+}
+
+test "user_window uses the picker range when valid, else the 30d default" {
+    (win, label) = _user_window("2026-07-01", "2026-07-15");
+    assert "toDateTime('2026-07-01 00:00:00')" in win;
+    assert "timestamp < toDateTime('2026-07-15 00:00:00')" in win;
+    assert label == "2026-07-01 → 2026-07-15";
+    (win2, label2) = _user_window("", "");
+    assert "INTERVAL 30 DAY" in win2;
+    assert label2 == "last 30 days";
+    (win3, label3) = _user_window("2026-07-15", "2026-07-01");   # inverted -> default
+    assert "INTERVAL 30 DAY" in win3;
+    assert label3 == "last 30 days";
 }

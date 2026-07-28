@@ -71,15 +71,15 @@ def:pub MiniTable(block: dict) -> JsxElement {
     </div>;
 }
 
-def:pub UserPeek(user: str, env: str, on_close: Callable[[], None]) -> JsxElement {
+def:pub UserPeek(user: str, env: str, on_close: Callable[[], None], date_from: str = "", date_to: str = "") -> JsxElement {
     has loading: bool = True;
     has d: dict = {};
 
-    async can with (user) entry {
+    async can with (user, date_from, date_to) entry {
         loading = True;
         try {
-            d = (await user_360(user, env)) as dict;
-        } except Exception as e {
+            d = (await user_360(user, env, date_from, date_to)) as dict;
+        } except Exception {
             d = {};
         }
         loading = False;
@@ -96,8 +96,9 @@ def:pub UserPeek(user: str, env: str, on_close: Callable[[], None]) -> JsxElemen
     }
     dn = str(prof.get("display_name", ""));
     plan = str(prof.get("plan", ""));
+    wlabel = str(d.get("window", "last 30 days"));
     sub = "first seen " + str(prof.get("first_seen", "—")) + " · last seen " + str(prof.get("last_seen", "—"))
-        + " · " + str(prof.get("events", 0)) + " events (last 30d)";
+        + " · " + str(prof.get("events", 0)) + " events (" + wlabel + ")";
     stats: list = [];
     for k in ["signed_up", "projects", "ai_turns", "ai_done", "ai_failed", "cost_usd", "previews", "deploys_ok", "deploys_failed", "gh_ok", "upgrades"] {
         v = summ.get(k);
@@ -107,6 +108,7 @@ def:pub UserPeek(user: str, env: str, on_close: Callable[[], None]) -> JsxElemen
     err = str(d.get("error", ""));
     replays: list = [];
     rb = d.get("replays", {}) as dict;
+    replay_err = str(rb.get("error", "") or "");
     for rr in (rb.get("rows", []) as list) {
         rl = rr as list;
         if len(rl) == 3 {
@@ -131,7 +133,7 @@ def:pub UserPeek(user: str, env: str, on_close: Callable[[], None]) -> JsxElemen
                 </div>
                 <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={close}>✕ Close</Button>
             </div>
-            <CardDescription className="text-sm">{sub} · drill-down window: last 30 days · env: {env}</CardDescription>
+            <CardDescription className="text-sm">{sub} · drill-down window: {wlabel} · env: {env}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
             {if loading {
@@ -151,16 +153,18 @@ def:pub UserPeek(user: str, env: str, on_close: Callable[[], None]) -> JsxElemen
                     </div>
                     <div className="grid grid-cols-12 gap-3">
                         <div className="col-span-12 lg:col-span-4">
-                            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cost by model (30d)</p>
+                            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cost by model</p>
                             <MiniTable block={d.get("models", {}) as dict} />
                         </div>
                         <div className="col-span-12 lg:col-span-8">
-                            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Projects by AI spend (30d)</p>
+                            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Projects by AI spend</p>
                             <MiniTable block={d.get("projects", {}) as dict} />
                         </div>
                         <div className="col-span-12">
                             <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Session replays (PostHog player)</p>
-                            {if len(replays) == 0 {
+                            {if replay_err != "" {
+                                <p className="text-xs text-destructive">{replay_err}</p>
+                            } elif len(replays) == 0 {
                                 <p className="text-xs text-muted-foreground">No recordings for this user.</p>
                             }}
                             <div className="flex flex-wrap gap-2">

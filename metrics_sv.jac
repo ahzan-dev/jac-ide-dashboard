@@ -444,6 +444,12 @@ glob METRICS: dict[str, Metric] = {
         caveat="Live, but low-volume so far — most users never click 👍/👎, so read as directional.",
         sql="SELECT round(100.0*countIf(toString(properties.rating)='up')/nullIf(count(),0),1) FROM events WHERE event='ai_response_rated' {env_filter} " + _RANGE
     ),
+    "rating_weekly": Metric(
+        key="rating_weekly", title="Helpful rate over time", shape="series", unit="%",
+        definition="Share of rated AI responses marked helpful (👍) per time bucket.",
+        caveat="Very low rating volume — a single vote can swing a bucket. Read the direction, not the wiggles.",
+        sql="SELECT {bkt}(timestamp) wk, round(100.0*countIf(toString(properties.rating)='up')/nullIf(count(),0),1) helpful_pct FROM events WHERE event='ai_response_rated' {env_filter} " + _RANGE + " GROUP BY wk ORDER BY wk"
+    ),
 
     # ---- cost (gated on POSTHOG_PROJECT_TOKEN → ai_generation_metered) ---
     "metered_rows": Metric(
@@ -454,19 +460,19 @@ glob METRICS: dict[str, Metric] = {
     "total_spend": Metric(
         key="total_spend", title="Total AI cost", unit="$",
         definition="Total dollars spent on AI usage this period.",
-        
+        caveat="Real litellm-metered dollars; runs missing the model property ('(blank)' in Cost-by-model) are still counted here.",
         sql="SELECT round(sum(toFloat64OrNull(toString(properties.cost_usd))),2) FROM events WHERE event='ai_generation_metered' {env_filter} " + _RANGE
     ),
     "cost_per_request": Metric(
         key="cost_per_request", title="Cost per AI request", unit="$",
         definition="Average dollar cost of one AI request.",
-        
+        caveat="Mean, not median — a few very expensive runs pull it up (see the per-run distribution).",
         sql="SELECT round(avg(toFloat64OrNull(toString(properties.cost_usd))),4) FROM events WHERE event='ai_generation_metered' {env_filter} " + _RANGE
     ),
     "cost_per_user": Metric(
         key="cost_per_user", title="Cost per active user", unit="$",
         definition="Average dollar cost per user who generated AI usage.",
-        
+        caveat="Divides by distinct SPENDERS (users with metered runs), not all active users.",
         sql="SELECT round(sum(toFloat64OrNull(toString(properties.cost_usd)))/nullIf(count(DISTINCT person_id),0),2) FROM events WHERE event='ai_generation_metered' {env_filter} " + _RANGE
     ),
 
@@ -510,14 +516,21 @@ glob METRICS: dict[str, Metric] = {
     # ---- breakdown rows (hbars / table) ---------------------------------
     "ai_fail_reasons": Metric(
         key="ai_fail_reasons", title="Top failure reasons", shape="rows",
-        definition="The most common reasons an AI request fails, such as taking too long and timing out.",
-        sql="SELECT coalesce(nullIf(toString(properties.reason),''),'unknown') reason, count() n FROM events WHERE event='ai_message_failed' {env_filter} " + _RANGE + " GROUP BY reason ORDER BY n DESC LIMIT 8"
+        definition="The most common reasons an AI request fails, grouped into failure families (raw error strings are normalized server-side).",
+        caveat="Families are pattern-matched from raw error text; 'other' rows show the first 60 chars of an unrecognized reason.",
+        sql="SELECT multiIf(reason ILIKE '%504%' OR reason ILIKE '%Gateway Time-out%' OR reason ILIKE '%timed out%' OR reason ILIKE '%timeout%','Gateway timeout (504)', reason ILIKE '%did not respond%','Agent did not respond', reason ILIKE '%already in progress%' OR reason ILIKE '%already in flight%','Turn already in flight', reason ILIKE '%redis%' OR reason ILIKE '%Connection refused%','Redis connection failed', reason ILIKE '%Failed to fetch%','Network fetch failed', reason ILIKE '%server restart%','Server restart interrupted', reason ILIKE '%no longer in your selected models%','Model removed from selection', reason ILIKE '%quota%' OR reason ILIKE '%limit reached%','Quota / plan limit', reason ILIKE '%BadRequestError%' OR reason ILIKE '%Exception - %','Upstream model API error', reason ILIKE '%Connection lost%','Connection lost', left(reason, 60)) family, count() n FROM (SELECT coalesce(nullIf(toString(properties.reason),''),'unknown') reason FROM events WHERE event='ai_message_failed' {env_filter} " + _RANGE + ") GROUP BY family ORDER BY n DESC LIMIT 8"
     ),
     "feature_table": Metric(
         key="feature_table", title="Feature adoption (detail)", shape="rows",
         definition="For each feature, how many users used it and what share of active users that represents.",
-        caveat="Share is out of actively-building users. Some features are paid-plan-only, so low numbers may reflect plan limits.",
-        sql="SELECT event feature, count(DISTINCT person_id) users, round(100.0*count(DISTINCT person_id)/nullIf((SELECT count(DISTINCT person_id) FROM events WHERE event IN ('ai_message_sent','preview_ready','project_created') {env_filter} " + _RANGE + "),0),1) adoption_pct FROM events WHERE event IN ('ide_opened','project_created','preview_start_requested','ai_message_sent','git_commit_succeeded','github_connect_succeeded','project_shared','export_downloaded','deploy_sandbox_clicked','deploy_production_clicked') {env_filter} " + _RANGE + " GROUP BY feature ORDER BY users DESC LIMIT 15"
+        caveat="Share is out of users who used ANY tracked feature this period (so the top feature reads ≤100%). Some features are paid-plan-only, so low numbers may reflect plan limits.",
+        sql="SELECT event feature, count(DISTINCT person_id) users, round(100.0*count(DISTINCT person_id)/nullIf((SELECT count(DISTINCT person_id) FROM events WHERE event IN ('ide_opened','project_created','preview_start_requested','ai_message_sent','git_commit_succeeded','github_connect_succeeded','project_shared','export_downloaded','deploy_sandbox_clicked','deploy_production_clicked') {env_filter} " + _RANGE + "),0),1) adoption_pct FROM events WHERE event IN ('ide_opened','project_created','preview_start_requested','ai_message_sent','git_commit_succeeded','github_connect_succeeded','project_shared','export_downloaded','deploy_sandbox_clicked','deploy_production_clicked') {env_filter} " + _RANGE + " GROUP BY feature ORDER BY users DESC LIMIT 15"
+    ),
+    "feature_weekly": Metric(
+        key="feature_weekly", title="Feature usage over time", shape="rows",
+        definition="Unique users per time bucket for the six core features — long-form rows (bucket, feature, users); the client pivots them into one line per feature.",
+        caveat="Users, not events — one busy user counts once per bucket. Paid-plan-only features are capped by plan limits.",
+        sql="SELECT toString({bkt}(timestamp)) bucket, event feature, count(DISTINCT person_id) users FROM events WHERE event IN ('ide_opened','preview_start_requested','ai_message_sent','project_created','deploy_production_clicked','github_connect_succeeded') {env_filter} " + _RANGE + " GROUP BY bucket, feature ORDER BY bucket ASC, users DESC"
     ),
 
     # ---- breakdown rows (hbars / table) ---------------------------------
@@ -547,9 +560,9 @@ glob METRICS: dict[str, Metric] = {
     # ---- funnel ---------------------------------------------------------
     "funnel": Metric(
         key="funnel", title="New-user journey", shape="funnel",
-        definition="Of the people who signed up this period, how many went on to create a project, send an AI request, get a result, and preview it.",
+        definition="Of the people who signed up this period, how many completed each milestone AND every one before it — a true funnel, so each step can only shrink.",
         steps=["Signed up", "Created project", "Sent AI msg", "Got a build", "Previewed"],
-        sql="WITH s AS (SELECT DISTINCT person_id FROM events WHERE event='auth_signup_succeeded' {env_filter} " + _RANGE + ") SELECT (SELECT count() FROM s) signed_up, countDistinct(if(event='project_created',person_id,NULL)) created_project, countDistinct(if(event='ai_message_sent',person_id,NULL)) sent_ai, countDistinct(if(event='ai_message_completed',person_id,NULL)) got_build, countDistinct(if(event='preview_ready',person_id,NULL)) previewed FROM events WHERE true {env_filter} " + _RANGE + " AND person_id IN (SELECT person_id FROM s)"
+        sql="WITH s AS (SELECT DISTINCT person_id FROM events WHERE event='auth_signup_succeeded' {env_filter} " + _RANGE + "), p AS (SELECT person_id, max(event='project_created') has_proj, max(event='ai_message_sent') has_ai, max(event='ai_message_completed') has_build, max(event='preview_ready') has_prev FROM events WHERE true {env_filter} " + _RANGE + " AND person_id IN (SELECT person_id FROM s) GROUP BY person_id) SELECT (SELECT count() FROM s) signed_up, countIf(has_proj) created_project, countIf(has_proj AND has_ai) sent_ai, countIf(has_proj AND has_ai AND has_build) got_build, countIf(has_proj AND has_ai AND has_build AND has_prev) previewed FROM p"
     ),
 
     # ---- deploy ---------------------------------------------------------
@@ -576,7 +589,7 @@ glob METRICS: dict[str, Metric] = {
     "retention": Metric(
         key="retention", title="Retention over time", shape="retention", window="signup-week cohorts, 6 weeks",
         definition="Groups users by the week they signed up, then tracks the share still using the AI each following week. The 4-week mark shows who sticks around after a month.",
-        caveat="Based on small groups so far — treat the pattern as directional. Groups under 15 people are flagged as too small to trust.",
+        caveat="Based on small groups so far — treat the pattern as directional. Groups under 15 people are flagged as too small to trust. Cohorts before the 2026-07 domain cutover read empty and are hidden.",
         good_when_up=True
     ),
 
@@ -593,6 +606,12 @@ glob METRICS: dict[str, Metric] = {
         definition="Number of paid subscription upgrades that completed in this period.",
         sql="SELECT count() FROM events WHERE event='upgrade_checkout_succeeded' {env_filter} " + _RANGE,
         spark="SELECT {bkt}(timestamp) wk, count() n FROM events WHERE event='upgrade_checkout_succeeded' {env_filter} " + _RANGE + " GROUP BY wk ORDER BY wk"
+    ),
+    "checkout_outcomes": Metric(
+        key="checkout_outcomes", title="Checkout activity", shape="rows",
+        definition="The money loop end-to-end: upgrade clicks, completed paid upgrades, checkout failures, and top-up intent.",
+        caveat="Event counts, not users — one user can retry. upgrade_checkout_succeeded only ships since 2026-07-22, so earlier clicks can't show a completion.",
+        sql="SELECT multiIf(event='upgrade_checkout_clicked','Upgrade clicked', event='upgrade_checkout_succeeded','Upgrade completed', event='upgrade_checkout_failed','Checkout failed', event='topup_checkout_clicked','Top-up clicked', event) stage, count() n FROM events WHERE event IN ('upgrade_checkout_clicked','upgrade_checkout_succeeded','upgrade_checkout_failed','topup_checkout_clicked') {env_filter} " + _RANGE + " GROUP BY stage ORDER BY n DESC"
     ),
     "mrr_churn": Metric(
         key="mrr_churn", title="MRR lost to churn", unit="$", good_when_up=False,
@@ -691,8 +710,8 @@ glob METRICS: dict[str, Metric] = {
     "deploy_outcomes": Metric(
         key="deploy_outcomes", title="Deploy outcomes", shape="rows",
         definition="Sandbox vs production deploys: clicks, successes, and failures — each as both event counts and unique users.",
-        caveat="Events and users differ (one user can retry many times) — read the users columns for adoption, the counts for friction.",
-        sql="SELECT if(event LIKE 'deploy_sandbox%','Sandbox','Production') kind, countIf(event IN ('deploy_sandbox_clicked','deploy_production_clicked')) clicks, uniqIf(person_id, event IN ('deploy_sandbox_clicked','deploy_production_clicked')) users_clicked, countIf(event IN ('deploy_sandbox_succeeded','deploy_production_succeeded')) succeeded, uniqIf(person_id, event IN ('deploy_sandbox_succeeded','deploy_production_succeeded')) users_ok, countIf(event IN ('deploy_sandbox_failed','deploy_production_failed')) failed, uniqIf(person_id, event IN ('deploy_sandbox_failed','deploy_production_failed')) users_failed FROM events WHERE event IN ('deploy_sandbox_clicked','deploy_sandbox_succeeded','deploy_sandbox_failed','deploy_production_clicked','deploy_production_succeeded','deploy_production_failed') {env_filter} " + _RANGE + " GROUP BY kind ORDER BY clicks DESC"
+        caveat="Events and users differ (one user can retry many times) — read the users columns for adoption, the counts for friction. 'no outcome' = clicks that never produced a succeeded/failed event (abandoned, or clicked before outcome events shipped on 2026-07-18).",
+        sql="SELECT if(event LIKE 'deploy_sandbox%','Sandbox','Production') kind, countIf(event IN ('deploy_sandbox_clicked','deploy_production_clicked')) clicks, uniqIf(person_id, event IN ('deploy_sandbox_clicked','deploy_production_clicked')) users_clicked, countIf(event IN ('deploy_sandbox_succeeded','deploy_production_succeeded')) succeeded, uniqIf(person_id, event IN ('deploy_sandbox_succeeded','deploy_production_succeeded')) users_ok, countIf(event IN ('deploy_sandbox_failed','deploy_production_failed')) failed, uniqIf(person_id, event IN ('deploy_sandbox_failed','deploy_production_failed')) users_failed, greatest(0, countIf(event IN ('deploy_sandbox_clicked','deploy_production_clicked')) - countIf(event IN ('deploy_sandbox_succeeded','deploy_production_succeeded','deploy_sandbox_failed','deploy_production_failed'))) no_outcome FROM events WHERE event IN ('deploy_sandbox_clicked','deploy_sandbox_succeeded','deploy_sandbox_failed','deploy_production_clicked','deploy_production_succeeded','deploy_production_failed') {env_filter} " + _RANGE + " GROUP BY kind ORDER BY clicks DESC"
     ),
     "user_model_cost_matrix": Metric(
         key="user_model_cost_matrix", title="Cost per user × model", shape="composite",
@@ -853,6 +872,11 @@ def _shape_retention(env: str) -> dict {
         vals = coh["values"] as list;
         base = vals[0]["count"];
         bf = base as float;
+        if not bf {
+            # Empty cohorts are an artifact of the jachammer.ai-only prod filter
+            # (pre-cutover signups lived on the old dead domain) — hide, don't render junk.
+            continue;
+        }
         row = [coh["date"], base];
         for v in vals {
             cf = v["count"] as float;
@@ -932,7 +956,8 @@ async def:priv metric(key: str, env: str, date_from: str, date_to: str, refresh:
     window_label = m.window if m.window else f"{date_from} → {date_to} ({span_label})";
     meta: dict = {
         "definition": m.definition, "window": window_label, "caveat": m.caveat,
-        "env": env, "unit": m.unit, "good_when_up": m.good_when_up, "cached": False
+        "env": env, "unit": m.unit, "good_when_up": m.good_when_up, "cached": False,
+        "key": key
     };
 
     ck = f"metric:{key}:{env}:{date_from}:{date_to}";
@@ -1508,8 +1533,10 @@ def:priv pin_add(recipe: dict) -> list {
     if "good_up" in recipe {
         gu = recipe["good_up"] as bool;
     }
+    # chart is advisory only for kind=metric (_run_pin re-derives via _tile_for),
+    # so tolerate recipes without it (the tile-header 📌 sends just kind/ref/title).
     item = {"id": kind + "::" + ref, "kind": kind, "ref": ref,
-            "title": str(recipe["title"]), "chart": str(recipe["chart"]), "good_up": gu};
+            "title": str(recipe["title"]), "chart": str(recipe.get("chart", "auto")), "good_up": gu};
     root ++> Pin(data=item);
     return pin_list();
 }
@@ -2043,7 +2070,7 @@ def _report_context(r: Report) -> str {
                         }
                     }
                     if seen and (cn not in ["ts"]) {
-                        sums = sums + [cn + "=" + str(round(total, 2))];
+                        sums = sums + [str(cn) + "=" + str(round(total, 2))];
                     }
                     ci2 = ci2 + 1;
                 }
@@ -2419,6 +2446,23 @@ def:priv window_remove(name: str) -> list {
 # The identity shown in tables is email OR display_name OR name OR 'anon:<pid8>'.
 # Build a WHERE predicate that finds that person again. Values are quote-stripped
 # (identity strings never legitimately contain quotes/backslashes).
+"""Shared window for the directory + 360 panels: the picker's range when valid,
+else the historical 30-day default. Returns (SQL predicate, human label)."""
+def _user_window(date_from: str, date_to: str) -> tuple[str, str] {
+    if date_from and date_to {
+        df = _parse_dt(date_from);
+        dt2 = _parse_dt(date_to);
+        if (df is not None) and (dt2 is not None) and (dt2 > df) {
+            f = _norm_dt(df);
+            t = _norm_dt(dt2);
+            win = ("AND timestamp >= toDateTime('" + f + "')"
+                   + " AND timestamp < toDateTime('" + t + "')");
+            return (win, f[:10] + " → " + t[:10]);
+        }
+    }
+    return ("AND timestamp > now() - INTERVAL 30 DAY", "last 30 days");
+}
+
 def _who_predicate(user: str) -> str {
     u = re.sub(r"['\\\\]", "", user.strip());
     if u.startswith("anon:") {
@@ -2429,10 +2473,10 @@ def _who_predicate(user: str) -> str {
         + " OR coalesce(toString(person.properties.name),'') = '" + u + "')");
 }
 
-async def:priv user_360(user: str, env: str) -> dict {
+async def:priv user_360(user: str, env: str, date_from: str = "", date_to: str = "") -> dict {
     env = _clamp_env(env);
     ef = env_filter(env);
-    win = "AND timestamp > now() - INTERVAL 30 DAY";
+    (win, wlabel) = _user_window(date_from, date_to);
     # Two-step: resolve the person_id once (identity predicates need the persons
     # join — fine for one windowed lookup), then run every panel against the bare
     # person_id. Person-prop predicates in 5 parallel queries 504 ClickHouse.
@@ -2440,8 +2484,8 @@ async def:priv user_360(user: str, env: str) -> dict {
         + " " + ef + " " + win + " LIMIT 1");
     pres = await asyncio.to_thread(run_hogql, q_pid);
     if ("error" in pres) or (not (pres.get("results") or [])) {
-        return {"user": user, "window": "last 30 days",
-                "error": "user not found in the last 30 days" if "error" not in pres else str(pres["error"])[:120],
+        return {"user": user, "window": wlabel,
+                "error": f"user not found ({wlabel})" if "error" not in pres else str(pres["error"])[:120],
                 "profile": {"columns": [], "rows": []}, "summary": {"columns": [], "rows": []},
                 "models": {"columns": [], "rows": []}, "projects": {"columns": [], "rows": []},
                 "timeline": {"columns": [], "rows": []}};
@@ -2491,16 +2535,18 @@ async def:priv user_360(user: str, env: str) -> dict {
         asyncio.to_thread(run_hogql, q_timeline),
         asyncio.to_thread(_fetch_recordings, pid)
     );
-    out: dict = {"user": user, "window": "last 30 days", "error": ""};
+    out: dict = {"user": user, "window": wlabel, "error": ""};
     labels = ["profile", "summary", "models", "projects", "timeline", "replays"];
     i = 0;
     for res in results {
         rd = res as dict;
-        if "error" in rd {
+        # "rows" first: a panel that carries rows + its own error (replays) keeps
+        # the error panel-local instead of poisoning the whole 360.
+        if "rows" in rd {
+            out[labels[i]] = rd;
+        } elif "error" in rd {
             out[labels[i]] = {"columns": [], "rows": []};
             out["error"] = str(rd["error"])[:120];
-        } elif "rows" in rd {
-            out[labels[i]] = rd;
         } else {
             out[labels[i]] = {"columns": rd["columns"], "rows": rd["results"]};
         }
@@ -2511,9 +2557,10 @@ async def:priv user_360(user: str, env: str) -> dict {
 
 # Users directory (User-360 full page, spec Phase 1) — every active person of
 # the last 30d by recency; each row drills into the 360 panel client-side.
-async def:priv user_list(env: str) -> dict {
+async def:priv user_list(env: str, date_from: str = "", date_to: str = "") -> dict {
     env = _clamp_env(env);
     ef = env_filter(env);
+    (win, label) = _user_window(date_from, date_to);
     sql = ("SELECT coalesce(nullIf(toString(any(person.properties.email)),''),"
         + " nullIf(toString(any(person.properties.display_name)),''),"
         + " nullIf(toString(any(person.properties.name)),''),"
@@ -2523,13 +2570,13 @@ async def:priv user_list(env: str) -> dict {
         + " count() events, countIf(event='ai_message_sent') ai_turns,"
         + " countIf(event='project_created') projects,"
         + " round(coalesce(sumIf(toFloat64OrNull(toString(properties.cost_usd)), event='ai_generation_metered'),0),2) cost_usd"
-        + " FROM events WHERE true " + ef + " AND timestamp > now() - INTERVAL 30 DAY"
+        + " FROM events WHERE true " + ef + " " + win
         + " GROUP BY person_id ORDER BY max(timestamp) DESC LIMIT 200");
     res = await asyncio.to_thread(run_hogql, sql);
     if "error" in res {
-        return {"columns": [], "rows": [], "error": str(res["error"])[:120]};
+        return {"columns": [], "rows": [], "error": str(res["error"])[:120], "window": label};
     }
-    return {"columns": res["columns"], "rows": res["results"], "error": ""};
+    return {"columns": res["columns"], "rows": res["results"], "error": "", "window": label};
 }
 
 # Session replays for one person (PostHog native) — deep-links into the player.
@@ -2539,7 +2586,8 @@ def _fetch_recordings(pid: str) -> dict {
             f"{PH_HOST}/api/projects/{PH_PROJECT}/session_recordings?person_uuid={pid}&limit=5",
             headers={"Authorization": f"Bearer {PH_KEY}"}, timeout=15);
         if resp.status_code != 200 {
-            return {"columns": [], "rows": []};
+            return {"columns": [], "rows": [],
+                    "error": f"replay list unavailable (PostHog HTTP {resp.status_code})"};
         }
         d = resp.json();
         rows: list = [];
@@ -2551,8 +2599,9 @@ def _fetch_recordings(pid: str) -> dict {
                          str(rd.get("id", ""))]);
         }
         return {"columns": ["started_utc", "duration_s", "replay_id"], "rows": rows};
-    } except Exception {
-        return {"columns": [], "rows": []};
+    } except Exception as e {
+        return {"columns": [], "rows": [],
+                "error": f"replay list unavailable ({str(e)[:80]})"};
     }
 }
 
@@ -2633,6 +2682,35 @@ def:priv event_usage(events: list) -> dict {
         out[nm] = keys;
     }
     return out;
+}
+
+
+"""Live prod event counts (last 14d) for the data dictionary — the 🟢/🔴 status
+is DERIVED from these, never hardcoded, so the dictionary can't drift from
+reality again (it claimed ratings were un-instrumented while Feedback showed
+a live helpful-rate). Returns {event: count}; missing = 0."""
+def:priv event_liveness(events: list) -> dict {
+    names = [];
+    for name in events {
+        names = names + ["'" + str(name).replace("'", "") + "'"];
+    }
+    if not names {
+        return {};
+    }
+    sql = ("SELECT event, count() n FROM events WHERE timestamp >= now() - INTERVAL 14 DAY "
+           + env_filter("prod") + " AND event IN (" + ", ".join(names) + ") GROUP BY event");
+    res = run_hogql(sql);
+    out: dict = {};
+    for name in events {
+        out[str(name)] = 0;
+    }
+    if "error" in res {
+        return {"error": res["error"], "counts": out};
+    }
+    for row in res["results"] as list {
+        out[str(row[0])] = row[1];
+    }
+    return {"counts": out};
 }
 
 # ---- composite metrics (G3): N queries + a Python combine step -------------

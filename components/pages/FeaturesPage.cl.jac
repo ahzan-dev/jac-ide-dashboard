@@ -1,8 +1,8 @@
 sv import from ...metrics_sv { metrics_batch }
 import from ..dash.util { cache_key, cache_get, cache_put, cacheable, inflight_start, inflight_end }
-import from ..dash.ChartTiles { BarsTile, TableTile, Banner }
+import from ..dash.ChartTiles { BarsTile, TableTile, Banner, MultiLineTile }
 
-glob FEATURES_KEYS: list = ["feature_table", "project_sources"];
+glob FEATURES_KEYS: list = ["feature_table", "project_sources", "feature_weekly"];
 
 def:pub FeaturesPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxElement {
     has data: dict = {};
@@ -36,6 +36,7 @@ def:pub FeaturesPage(env: str, date_from: str, date_to: str, refresh_n: int) -> 
 
     return <div className="grid grid-cols-12 gap-4">
         <div className="col-span-12"><Banner text="These numbers reflect real feature usage only — we don't break it down by programming language, since our AI is one unified assistant. Some features are only on paid plans (Free has no deploys, folder-upload, or community features), so low usage there often reflects plan limits, not lack of interest." /></div>
+        <div className="col-span-12"><MultiLineTile title="Feature usage over time" data={data["feature_weekly"]} loading={loading} /></div>
         <div className="col-span-12 lg:col-span-7"><TableTile title="Feature adoption (detail)" data={data["feature_table"]} loading={loading} /></div>
         <div className="col-span-12 lg:col-span-5"><BarsTile title="How projects start" data={data["project_sources"]} loading={loading} /></div>
     </div>;

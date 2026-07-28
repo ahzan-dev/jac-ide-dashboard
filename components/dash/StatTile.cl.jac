@@ -1,3 +1,4 @@
+sv import from ...metrics_sv { pin_add }
 import from ..ui.card { Card, CardHeader, CardTitle, CardContent }
 import from ..ui.skeleton { Skeleton }
 import from ..ui.tooltip { Tooltip, TooltipTrigger, TooltipContent }
@@ -6,8 +7,24 @@ import from "recharts" { AreaChart, Area }
 import from .util { fmt_val, slope_of, delta_badge }
 
 # Presentational KPI tile: receives its metric result (`data`) from the page's batch fetch.
-def:pub StatTile(title: str, data: any, loading: bool) -> JsxElement {
+# Pinnable for free via the server-stamped meta.key (same contract as Frame in ChartTiles).
+def:pub StatTile(title: str, data: any, loading: bool, pinnable: bool = True) -> JsxElement {
+    has pinned: bool = False;
+
     m = data["meta"] if data else None;
+    mkey = str((m as dict).get("key", "") or "") if m else "";
+    async def do_pin -> None {
+        try {
+            recipe = {"kind": "metric", "ref": mkey, "title": title, "chart": "auto", "good_up": True};
+            await pin_add(recipe);
+        } except Exception {
+            return;
+        }
+    }
+    def on_pin(e: MouseEvent) {
+        pinned = True;
+        do_pin();
+    }
     definition = str(m["definition"]) if m else "";
     unit = str(m["unit"]) if m else "";
     caveat = str(m["caveat"]) if m else "";
@@ -34,11 +51,16 @@ def:pub StatTile(title: str, data: any, loading: bool) -> JsxElement {
                         <TooltipContent className="max-w-xs">{definition}</TooltipContent>
                     </Tooltip>
                 </div>
-                {if (not loading) and sl["txt"] {
-                    <span className={"text-xs font-medium tabular-nums " + ("text-success" if sl["cls"] == "good" else ("text-destructive" if sl["cls"] == "bad" else "text-muted-foreground"))}>
-                        {str(sl["arrow"]) + " " + str(sl["txt"])}
-                    </span>
-                }}
+                <div className="flex shrink-0 items-center gap-1.5">
+                    {if (not loading) and sl["txt"] {
+                        <span className={"text-xs font-medium tabular-nums " + ("text-success" if sl["cls"] == "good" else ("text-destructive" if sl["cls"] == "bad" else "text-muted-foreground"))}>
+                            {str(sl["arrow"]) + " " + str(sl["txt"])}
+                        </span>
+                    }}
+                    {if pinnable and (mkey != "") {
+                        <button className="text-xs text-muted-foreground opacity-60 hover:opacity-100 disabled:opacity-100" onClick={on_pin} disabled={pinned} title="Pin to My Dashboard">{"📌✓" if pinned else "📌"}</button>
+                    }}
+                </div>
             </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-2">

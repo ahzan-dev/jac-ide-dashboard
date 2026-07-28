@@ -163,7 +163,7 @@ def HeadBtn(label: str, idx: int, marker: str, on_sort: Callable[[int], None]) -
     </button>;
 }
 
-def:pub DataTable(columns: list, rows: list, env: str) -> JsxElement {
+def:pub DataTable(columns: list, rows: list, env: str, date_from: str = "", date_to: str = "") -> JsxElement {
     has q: str = "";
     has sort_col: int = -1;
     has sort_desc: bool = True;
@@ -345,7 +345,7 @@ def:pub DataTable(columns: list, rows: list, env: str) -> JsxElement {
             </Table>
         </div>
         {if sel_user != "" {
-            <UserPeek user={sel_user} env={env} on_close={close_peek} />
+            <UserPeek user={sel_user} env={env} on_close={close_peek} date_from={date_from} date_to={date_to} />
         }}
         {if sel_project != "" {
             <ProjectPeek project={sel_project} env={env} on_close={close_peek} />

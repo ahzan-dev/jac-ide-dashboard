@@ -97,13 +97,14 @@
 
 ## C. Already built — just launch the UI (zero tracking work)
 
-### C-12 · `ai_response_rated` (thumbs up/down) — **HIGH · ship**
-- Event + code exist (`ChatPanel.cl.jac`); the UI is **not launched**. The `rating_ratio` metric reads empty
-  **by design** until it ships. Unlocks helpful-rate, avg rating, quality-by-model.
+### C-12 · `ai_response_rated` (thumbs up/down) — ✅ **SHIPPED (verified in prod 2026-07-28)**
+- LIVE: 15 events / 12 users in the 30d prod probe (`up`/`down` ratings since 2026-07-13). Powers the
+  helpful-rate tiles on AI Quality + Feedback and the `rating_weekly` trend. Still low-volume — read as
+  directional.
 
-### C-13 · `ai_issue_reported` — **HIGH · ship**
-- Event exists; UI **not launched**. The `issue_categories` metric reads empty until it ships. Unlocks the
-  issue-category breakdown tile.
+### C-13 · `ai_issue_reported` — ✅ **SHIPPED (verified in prod 2026-07-28)**
+- LIVE: 3 events / 2 users (30d probe). Feeds the Issues & friction log; volume is tiny, which is exactly
+  why `issue_log` (all failure families) remains the honest issues source.
 
 ---
 

@@ -273,6 +273,35 @@ Prompted by a per-tile "does this help a decision?" review. Fixes:
   fetches it on mount (`async can with entry`) and shows a **"Metrics"** column = count of registry metrics
   referencing each event (`—` when none). Self-updating — can't silently drift from the registry.
 
+## Audit-fix batch (2026-07-28 — plan: `.docs/IMPROVEMENT_PLAN.md`; P0–P2 shipped, P3 open)
+Event-availability-gated implementation (prod probe first; nothing built on absent events).
+- **Trust fixes**: `funnel` is a TRUE funnel now (each step requires all prior — 205→89→85→79→78);
+  `feature_table` denominator = users of ANY tracked feature (≤100%); `ai_fail_reasons` normalized into
+  failure FAMILIES server-side (504/no-response/turn-in-flight/redis/fetch/restart/model-removed/upstream-API/
+  connection-lost, fallback `left(reason,60)`); retention shaper HIDES N=0 cohorts (domain-cutover artifact);
+  `deploy_outcomes` gained a `no_outcome` column; `deploy_success` scalar now rendered on Health.
+- **Dictionary is self-truthing**: new `def:priv event_liveness(events)` (14d prod counts, one grouped query)
+  → DataDictionary status 🟢/🔴 is COMPUTED, never hardcoded (plus a `14d` count column). Event list expanded
+  (~37 events incl. session-end, edits, checkout-succeeded, subscription_canceled 🔴, transcript 🔴).
+- **Revenue page** (`components/pages/RevenuePage.cl.jac`, nav "Revenue", CoinsDollarIcon): Stripe MRR
+  ($2285/mo · 103 subs), paid_upgrades (92), upgrade_conversion (67.6%), margin, new `checkout_outcomes`
+  metric, upgrades_detail table. NO mrr_churn tile — `subscription_canceled` has zero prod events (banner
+  says so; add the tile when it ships).
+- **Pin-everywhere**: `metric()` stamps `meta.key` → `Frame` (ChartTiles) + `StatTile` auto-render a 📌 that
+  `pin_add`s `{kind:"metric", ref:key, chart:"auto"}`; `pin_add` tolerates missing chart (re-derived by
+  `_run_pin`/`_tile_for`). `pinnable={False}` suppresses (DynamicTile/Ask has its own pin flow). ⚠ the
+  header-📌 recipe MUST include or tolerate `chart` — a bare recipe used to KeyError silently.
+- **Directory follows the date picker**: `user_list`/`user_360` take optional `date_from/date_to`
+  (`_user_window` helper, 30d fallback, window label returned + shown); replay fetch errors surface
+  panel-locally ("replay list unavailable (...)") instead of silent empty.
+- New metrics: `rating_weekly` (Quality+, low-N caveat), `feature_weekly` (long-form rows → client
+  `MultiLineTile` pivot in ChartTiles), `checkout_outcomes`, `signup_trigger_breakdown` now tiled on Users
+  (LIVE: direct 180 / guest_locked_feature 14 / dashboard_prompt 12). Undo-rate/failure-rate orphan tiles
+  moved into KPI rows; Overview gained its missing honesty banner.
+- Still upstream-blocked (do NOT fake): `subscription_canceled`/`downgraded`, `topup_checkout_succeeded`,
+  UTM (`acquisition_channel` reads all-direct), `cold_start`, `model` on `ai_message_sent` (0%) and on ~22%
+  of metered runs ("(blank)").
+
 ## AI-first "Ask" builder + byLLM eval (2026-07)
 - **Ask (AI builder) page** (`components/pages/AskPage.cl.jac`, nav "✨ Ask") — a conversational planner: NL
   question → `ai_build(question,env,date_from,date_to)` (def:priv) → byLLM `_plan_query` returns a `QueryPlan`
