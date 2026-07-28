@@ -188,6 +188,10 @@ def PinnableTile(tile: dict, on_pin: Callable[[dict], None]) -> JsxElement {
 
 # A conversation row in the thread rail. active = the currently-open thread.
 # Delete is TWO-step (✕ → "sure?") — it's irreversible and used to fire instantly.
+# NB: rows MUST be keyed by thread ID (never list index) and the message loop keys
+# include thread_id — index keys made React reuse a deleted row's armed=True state
+# for the NEXT thread ("sure?" appearing unclicked) and leaked pinned state across
+# thread switches.
 def ThreadRow(thread: dict, active: bool, on_open: Callable[[str], None], on_del: Callable[[str], None]) -> JsxElement {
     has armed: bool = False;
 
@@ -519,9 +523,6 @@ def:pub AskPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxEl
                 {if len(threads) == 0 {
                     <span className="px-2 py-1 text-[11px] text-muted-foreground">No conversations yet</span>
                 }}
-                {#* key = thread ID, never the list index: index-keyed rows made React
-                   reuse a deleted row's component (armed=True) for the NEXT thread,
-                   so after one delete the following row showed "sure?" unclicked. *#}
                 {for th in threads {
                     <ThreadRow key={str((th as dict)["id"])} thread={th as dict} active={str((th as dict)["id"]) == thread_id} on_open={open_thread} on_del={del_thread} />
                 }}
@@ -577,9 +578,6 @@ def:pub AskPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxEl
         }}
 
         {for (mi, m) in enumerate(messages) {
-            {#* thread_id in the key: without it, switching threads reuses same-position
-               components — a PinnableTile's pinned=True from thread A leaked onto
-               thread B's tile at the same position. *#}
             <div key={"m" + thread_id + "_" + str(mi)} className="flex flex-col gap-3">
                 {if m["role"] == "user" {
                     <div className="max-w-[85%] self-end rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground">{str(m["text"])}</div>
