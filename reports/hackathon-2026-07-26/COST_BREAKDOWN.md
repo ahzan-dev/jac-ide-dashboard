@@ -1,6 +1,6 @@
 # Hackathon AI Cost Breakdown — Per User
 
-**Event window:** 2026-07-26 17:00 → 2026-07-27 00:30 UTC (= Jul 26 10:30 PM → Jul 27 9:00 AM Sri Lanka time) · **Scope:** jachammer.ai production only
+**Event window:** 2026-07-26 17:00 → 2026-07-27 03:30 UTC (= Jul 26 10:30 PM → Jul 27 9:00 AM Sri Lanka time) · **Scope:** jachammer.ai production only
 **Total metered AI cost: $526.62** across **301 generation runs** by **57 users** (of 112 hackathon signups — the rest used no AI).
 
 _Source: server-metered `ai_generation_metered` (real litellm dollars, not estimates). Per-user rows below sum to $526.62 — reconciles to the total to the cent. Full row-level detail: `hackathon_cost_breakdown.xlsx`._
@@ -86,4 +86,4 @@ _Source: server-metered `ai_generation_metered` (real litellm dollars, not estim
 - Concentration: the top 5 spenders account for 59% of total cost.
 
 ---
-_Validated three ways: raw per-turn reconciliation to the cent; independently rebuilt by the JacHammer Analytics Report Studio with matching numbers; re-verified under the hardened jachammer.ai-only production filter (zero contamination). Generated 2026-07-28 03:19 UTC._
+_Validated three ways: raw per-turn reconciliation to the cent; independently rebuilt by the JacHammer Analytics Report Studio with matching numbers; re-verified under the hardened jachammer.ai-only production filter (zero contamination). Generated 2026-07-28 03:30 UTC._
