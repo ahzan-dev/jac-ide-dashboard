@@ -7,9 +7,9 @@ import from ..ui.table { Table, TableHeader, TableBody, TableRow, TableHead, Tab
 import from ..ui.chart { ChartContainer, ChartTooltip, ChartTooltipContent }
 import from "recharts" {
     LineChart, Line, BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid,
-    PieChart, Pie, Cell
+    PieChart, Pie, Cell, ReferenceArea
 }
-import from .util { fmt_num, pct1, short_date, axis_tick, delta_badge, human_window }
+import from .util { fmt_num, pct1, short_date, axis_tick, delta_badge, human_window, annots_for }
 import from .DataTable { DataTable }
 
 # dataviz validated categorical palette (fixed order, never cycled)
@@ -64,6 +64,7 @@ def Frame(title: str, data: any, children: any = None) -> JsxElement {
 # ============================ Line chart tile ==============================
 def:pub LineTile(title: str, data: any, loading: bool) -> JsxElement {
     series = (data["series"] as list) if data else [];
+    annots = annots_for(series);
     return <Frame title={title} data={data}>
         {if loading {
             <Skeleton className="h-40 w-full" />
@@ -74,6 +75,9 @@ def:pub LineTile(title: str, data: any, loading: bool) -> JsxElement {
                     <XAxis dataKey="x" tickLine={False} axisLine={False} minTickGap={28} fontSize={10} tickFormatter={short_date} />
                     <YAxis tickLine={False} axisLine={False} width={40} fontSize={10} />
                     <ChartTooltip content={<ChartTooltipContent />} />
+                    {for (ani, an) in enumerate(annots) {
+                        <ReferenceArea key={"ln" + str(ani)} x1={str(an["x1"])} x2={str(an["x2"])} fill="var(--chart-1)" fillOpacity={0.07} strokeOpacity={0} label={str(an["name"])} />
+                    }}
                     <Line dataKey="y" type="monotone" stroke="var(--color-y)" strokeWidth={2} dot={False} />
                 </LineChart>
             </ChartContainer>
@@ -84,6 +88,7 @@ def:pub LineTile(title: str, data: any, loading: bool) -> JsxElement {
 # ============================ Area chart tile (volume trend) ==============
 def:pub AreaTile(title: str, data: any, loading: bool) -> JsxElement {
     series = (data["series"] as list) if data else [];
+    annots = annots_for(series);
     return <Frame title={title} data={data}>
         {if loading {
             <Skeleton className="h-40 w-full" />
@@ -94,6 +99,9 @@ def:pub AreaTile(title: str, data: any, loading: bool) -> JsxElement {
                     <XAxis dataKey="x" tickLine={False} axisLine={False} minTickGap={28} fontSize={10} tickFormatter={short_date} />
                     <YAxis tickLine={False} axisLine={False} width={40} fontSize={10} />
                     <ChartTooltip content={<ChartTooltipContent />} />
+                    {for (ani, an) in enumerate(annots) {
+                        <ReferenceArea key={"an" + str(ani)} x1={str(an["x1"])} x2={str(an["x2"])} fill="var(--chart-1)" fillOpacity={0.07} strokeOpacity={0} label={str(an["name"])} />
+                    }}
                     <Area dataKey="y" type="monotone" stroke="var(--color-y)" strokeWidth={2} fill="var(--color-y)" fillOpacity={0.18} dot={False} />
                 </AreaChart>
             </ChartContainer>

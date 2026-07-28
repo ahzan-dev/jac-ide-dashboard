@@ -30,7 +30,7 @@ import from .pages.CostPage { CostPage }
 import from .pages.SettingsPage { SettingsPage }
 import from .dash.DateRangePicker { DateRangePicker }
 import from .dash.SavedViews { SavedViews }
-import from .dash.util { iso_days_ago, iso_tomorrow, fmt_num, inflight_start, inflight_end, tz_display, tz_set, tz_name }
+import from .dash.util { iso_days_ago, iso_tomorrow, fmt_num, inflight_start, inflight_end, tz_display, tz_set, tz_name, set_annotations }
 
 # Three-layer IA (redesign plan P2): Summary (5-second page) → Explore
 # (diagnostic breakdowns) → Detail (row-level / build-your-own) → Settings.
@@ -109,6 +109,7 @@ def:pub AppShell(on_logout: Callable[[], None]) -> JsxElement {
     has active_page: str = _initial_page();
     has scope_n: any = None;             # live "events in scope" for the filter bar
     has windows: list[dict] = [];        # named windows (usable as range presets)
+    has booted: bool = False;            # pages render only AFTER windows/annotations exist
     has preset: str = "30d";             # today|7d|30d|90d|custom|win:<name>
 
     # P3: the env+range slice is the most important context on screen — keep a
@@ -120,9 +121,11 @@ def:pub AppShell(on_logout: Callable[[], None]) -> JsxElement {
         }
         try {
             windows = (await window_list()) as list[dict];
+            set_annotations(windows);
         } except Exception as e {
             windows = [];
         }
+        booted = True;
         try {
             r = (await scope_count(env, date_from, date_to)) as dict;
             scope_n = r.get("n");
@@ -307,7 +310,13 @@ def:pub AppShell(on_logout: Callable[[], None]) -> JsxElement {
                 </div>
 
                 <main className="p-6">
-                    {if active_page == "ask" {
+                    {if not booted {
+                        <div className="grid grid-cols-12 gap-4">
+                            <div className="col-span-12 sm:col-span-6 lg:col-span-3"><div className="h-32 animate-pulse rounded-lg bg-muted"></div></div>
+                            <div className="col-span-12 sm:col-span-6 lg:col-span-3"><div className="h-32 animate-pulse rounded-lg bg-muted"></div></div>
+                            <div className="col-span-12 lg:col-span-6"><div className="h-32 animate-pulse rounded-lg bg-muted"></div></div>
+                        </div>
+                    } elif active_page == "ask" {
                         <AskPage env={env} date_from={date_from} date_to={date_to} refresh_n={refresh_n} />
                     } elif active_page == "pinned" {
                         <PinnedPage env={env} date_from={date_from} date_to={date_to} refresh_n={refresh_n} />

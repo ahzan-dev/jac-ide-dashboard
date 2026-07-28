@@ -1,10 +1,10 @@
 sv import from ...metrics_sv { metrics_batch }
 sv import from ...billing_sv { billing_summary }
 import from ..dash.StatTile { StatTile }
-import from ..dash.ChartTiles { TableTile, AreaTile, BarsTile, StaticStat, Banner }
+import from ..dash.ChartTiles { TableTile, AreaTile, BarsTile, StaticStat, Banner, VBarTile }
 import from ..dash.util { cache_key, cache_get, cache_put, cacheable, inflight_start, inflight_end }
 
-glob COST_KEYS: list = ["metered_rows", "total_spend", "cost_per_request", "cost_per_user", "ai_requests_weekly", "cost_by_model", "byok_split", "user_model_cost_matrix", "project_cost_rollup"];
+glob COST_KEYS: list = ["metered_rows", "total_spend", "cost_per_request", "cost_per_user", "ai_requests_weekly", "cost_by_model", "byok_split", "user_model_cost_matrix", "project_cost_rollup", "cost_histogram", "top_cost_movers"];
 
 def:pub CostPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxElement {
     has data: dict = {};
@@ -85,5 +85,7 @@ def:pub CostPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxE
         <div className="col-span-12 lg:col-span-7"><TableTile title="Cost by model" data={data["cost_by_model"]} loading={loading} /></div>
         <div className="col-span-12 lg:col-span-5"><TableTile title="BYOK vs platform keys" data={data["byok_split"]} loading={loading} /></div>
         <div className="col-span-12"><TableTile title="Cost by project" data={data["project_cost_rollup"]} loading={loading} /></div>
+        <div className="col-span-12 lg:col-span-5"><VBarTile title="Cost per run — distribution" data={data["cost_histogram"]} loading={loading} /></div>
+        <div className="col-span-12 lg:col-span-7"><TableTile title="Top cost movers vs previous window" data={data["top_cost_movers"]} loading={loading} /></div>
     </div>;
 }

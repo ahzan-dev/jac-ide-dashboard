@@ -250,6 +250,61 @@ def:pub delta_badge(delta: any, good_when_up: bool) -> dict {
 # pin_*/view_* endpoints), not localStorage, so they follow the account across
 # browsers. See PinnedPage / AskPage / SavedViews.
 
+# ---- named-window annotations on trend charts (P4) --------------------------
+# AppShell loads the user's named windows once; trend tiles shade the span of
+# any named window that overlaps their series ("the hackathon happened HERE").
+# Populated by AppShell BEFORE pages first mount (AppShell gates page rendering
+# on the windows fetch): globs aren't reactive and jac2js memoizes components,
+# so annotations must exist before the first tile render — no later chance.
+glob ANNOTS: list = [];
+
+def:pub set_annotations(ws: list) {
+    ANNOTS.clear();
+    for w in ws {
+        ANNOTS.append(w);
+    }
+}
+
+# Overlap a named window with a series' x values (date or datetime strings,
+# lexicographically comparable). Returns [{x1, x2, name}] for ReferenceArea.
+def:pub annots_for(series: list) -> list {
+    out: list = [];
+    if len(series) < 2 {
+        return out;
+    }
+    for w in ANNOTS {
+        wd = w as dict;
+        f = str(wd.get("from_dt", ""));
+        t = str(wd.get("to_dt", ""));
+        if (f == "") or (t == "") {
+            continue;
+        }
+        x1 = "";
+        x2 = "";
+        for p in series {
+            x = str((p as dict)["x"]);
+            hit = False;
+            if len(x) <= 10 {
+                # date-granular bucket: overlap at the DATE level (an evening
+                # window like 22:30→06:00 must still mark both days)
+                hit = (x >= f[0:10]) and (x <= t[0:10]);
+            } else {
+                hit = (x[0:19] >= f) and (x[0:19] <= t);
+            }
+            if hit {
+                if x1 == "" {
+                    x1 = x;
+                }
+                x2 = x;
+            }
+        }
+        if x1 != "" {
+            out = out + [{"x1": x1, "x2": x2, "name": str(wd.get("name", ""))}];
+        }
+    }
+    return out;
+}
+
 # ---- client-side page cache: instant page switches --------------------------
 # Each page's last batch result is kept alive across mount/unmount so switching
 # pages renders immediately instead of re-fetching every time. Keyed by

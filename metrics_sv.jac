@@ -700,6 +700,18 @@ glob METRICS: dict[str, Metric] = {
         caveat="Pivot of the per-run cost rows; row totals reconcile to total_spend. Blank cells = the user never ran that model.",
         sql="COMPOSITE:cost_per_turn"
     ),
+    "top_cost_movers": Metric(
+        key="top_cost_movers", title="Top cost movers vs previous window", shape="composite",
+        definition="Users whose AI spend changed the most between this window and the immediately-preceding window of equal length — ranked by absolute dollar change.",
+        caveat="A new heavy user shows previous $0; a churned one shows current $0. Both are signal.",
+        sql="COMPOSITE:cost_movers"
+    ),
+    "cost_histogram": Metric(
+        key="cost_histogram", title="Cost per run — distribution", shape="series", unit="runs",
+        definition="How individual AI runs distribute across cost buckets — most runs are cheap; the tail is where the money goes.",
+        caveat="Buckets are per-RUN cost, not per-user.",
+        sql="SELECT bucket, count() n FROM (SELECT toFloat64OrNull(toString(properties.cost_usd)) c, multiIf(toFloat64OrNull(toString(properties.cost_usd)) < 0.1, '< $0.10', toFloat64OrNull(toString(properties.cost_usd)) < 0.5, '$0.10–0.50', toFloat64OrNull(toString(properties.cost_usd)) < 1, '$0.50–1', toFloat64OrNull(toString(properties.cost_usd)) < 2, '$1–2', toFloat64OrNull(toString(properties.cost_usd)) < 5, '$2–5', '$5+') bucket FROM events WHERE event='ai_generation_metered' {env_filter} " + _RANGE + ") GROUP BY bucket ORDER BY min(c)"
+    ),
     "project_sources": Metric(
         key="project_sources", title="How projects start", shape="rows",
         definition="How users started their projects: from a prompt, a template, a GitHub import, or a folder upload.",
@@ -1076,7 +1088,7 @@ glob _TILE_OVERRIDE: dict = {
     "user_rollup": "table", "signups_detail": "table", "cost_per_turn": "table",
     "cost_by_model": "table", "project_cost_rollup": "table", "byok_split": "table",
     "upgrades_detail": "table", "deploy_outcomes": "table", "issue_log": "table",
-    "user_model_cost_matrix": "table"
+    "user_model_cost_matrix": "table", "top_cost_movers": "table", "cost_histogram": "vbar"
 };
 
 def _tile_for(m: Metric) -> str {
@@ -2647,9 +2659,44 @@ async def _cx_user_model_matrix(env: str, date_from: str, date_to: str) -> dict 
     return _pivot_user_model(res["columns"] as list, res["results"] as list);
 }
 
+# Per-user spend, this window vs the preceding equal-length window, ranked by
+# absolute change ("who changed most" — P4 movers).
+async def _cx_cost_movers(env: str, date_from: str, date_to: str) -> dict {
+    wf = datetime.strptime(date_from, "%Y-%m-%d %H:%M:%S");
+    wt = datetime.strptime(date_to, "%Y-%m-%d %H:%M:%S");
+    prev_from = _norm_dt(wf - (wt - wf));
+    who = ("coalesce(nullIf(toString(any(person.properties.email)),''),"
+        + " nullIf(toString(any(person.properties.display_name)),''),"
+        + " nullIf(toString(any(person.properties.name)),''),"
+        + " concat('anon:', substring(toString(person_id),1,8)))");
+    cur = ("timestamp >= toDateTime('" + date_from + "') AND timestamp < toDateTime('" + date_to + "')");
+    prv = ("timestamp >= toDateTime('" + prev_from + "') AND timestamp < toDateTime('" + date_from + "')");
+    # sumIf over zero matching rows is NULL, and NULL poisons the HAVING/delta —
+    # coalesce every window sum to 0 (bit us: movers returned 1 row instead of 44).
+    csum = "coalesce(sumIf(toFloat64OrNull(toString(properties.cost_usd)), " + cur + "), 0)";
+    psum = "coalesce(sumIf(toFloat64OrNull(toString(properties.cost_usd)), " + prv + "), 0)";
+    sql = ("SELECT " + who + " user,"
+        + " round(" + csum + ",2) current_usd,"
+        + " round(" + psum + ",2) previous_usd,"
+        + " round(" + csum + " - " + psum + ",2) change_usd"
+        + " FROM events WHERE event='ai_generation_metered' " + env_filter(env)
+        + " AND timestamp >= toDateTime('" + prev_from + "') AND timestamp < toDateTime('" + date_to + "')"
+        + " GROUP BY person_id HAVING (" + csum + " + " + psum + ") > 0"
+        + " ORDER BY abs(change_usd) DESC LIMIT 15");
+    res = await asyncio.to_thread(run_hogql, sql);
+    if "error" in res {
+        return {"error": res["error"]};
+    }
+    return {"columns": res["columns"], "rows": res["results"]};
+}
+
 async def _run_metric(m: Metric, out: dict, env: str, range_days: int, date_from: str, date_to: str, bkt: str, ck: str) -> dict {
     if m.shape == "composite" {
-        r = await _cx_user_model_matrix(env, date_from, date_to);
+        if m.key == "top_cost_movers" {
+            r = await _cx_cost_movers(env, date_from, date_to);
+        } else {
+            r = await _cx_user_model_matrix(env, date_from, date_to);
+        }
         if "error" in r {
             out["error"] = r["error"];
             return out;
