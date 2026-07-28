@@ -2,6 +2,8 @@
 # Phase 1 (PostHog-only): profile, 30-day counters, cost by model, projects,
 # recent activity. Spec: .docs/posthog/USER_360_BUILD_SPEC.md.
 sv import from ...metrics_sv { user_360 }
+import from "@hugeicons/react" { HugeiconsIcon }
+import from "@hugeicons/core-free-icons" { UserIcon, PlayIcon, Cancel01Icon }
 import from ..ui.card { Card, CardHeader, CardTitle, CardDescription, CardContent }
 import from ..ui.badge { Badge }
 import from ..ui.button { Button }
@@ -113,7 +115,7 @@ def:pub UserPeek(user: str, env: str, on_close: Callable[[], None], date_from: s
         rl = rr as list;
         if len(rl) == 3 {
             replays = replays + [{
-                "label": "▶ " + str(rl[0]) + " UTC · " + str(rl[1]) + "s",
+                "label": str(rl[0]) + " UTC · " + str(rl[1]) + "s",
                 "href": "https://us.posthog.com/project/425465/replay/" + str(rl[2])
             }];
         }
@@ -123,7 +125,7 @@ def:pub UserPeek(user: str, env: str, on_close: Callable[[], None], date_from: s
         <CardHeader className="pb-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                    <CardTitle className="text-base font-semibold">👤 {ident}</CardTitle>
+                    <CardTitle className="flex items-center gap-1.5 text-base font-semibold"><HugeiconsIcon icon={UserIcon} className="size-4" /> {ident}</CardTitle>
                     {if (dn != "") and (dn != ident) {
                         <span className="text-xs text-muted-foreground">({dn})</span>
                     }}
@@ -131,7 +133,7 @@ def:pub UserPeek(user: str, env: str, on_close: Callable[[], None], date_from: s
                         <Badge variant="outline">{plan}</Badge>
                     }}
                 </div>
-                <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={close}>✕ Close</Button>
+                <Button variant="ghost" size="sm" className="h-6 gap-1 px-2 text-xs" onClick={close}><HugeiconsIcon icon={Cancel01Icon} className="size-3" /> Close</Button>
             </div>
             <CardDescription className="text-sm">{sub} · drill-down window: {wlabel} · env: {env}</CardDescription>
         </CardHeader>
@@ -169,7 +171,7 @@ def:pub UserPeek(user: str, env: str, on_close: Callable[[], None], date_from: s
                             }}
                             <div className="flex flex-wrap gap-2">
                                 {for (rpi, rp) in enumerate(replays) {
-                                    <a key={"rp" + str(rpi)} href={str(rp["href"])} target="_blank" className="rounded-md border border-border px-2 py-1 text-xs text-primary hover:bg-accent">{str(rp["label"])}</a>
+                                    <a key={"rp" + str(rpi)} href={str(rp["href"])} target="_blank" className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-primary hover:bg-accent"><HugeiconsIcon icon={PlayIcon} className="size-3" /> {str(rp["label"])}</a>
                                 }}
                             </div>
                         </div>

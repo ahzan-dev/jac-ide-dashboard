@@ -1,6 +1,8 @@
 # Project 360 drill-down panel (P4) — opens under any table when a project_id
 # cell is clicked. Summary counters + cost by model + recent activity.
 sv import from ...metrics_sv { project_360 }
+import from "@hugeicons/react" { HugeiconsIcon }
+import from "@hugeicons/core-free-icons" { PackageIcon, Cancel01Icon }
 import from .UserPeek { MiniTable }
 import from ..ui.card { Card, CardHeader, CardTitle, CardDescription, CardContent }
 import from ..ui.button { Button }
@@ -56,8 +58,8 @@ def:pub ProjectPeek(project: str, env: str, on_close: Callable[[], None]) -> Jsx
     return <Card className="mt-2 border-primary/30">
         <CardHeader className="pb-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
-                <CardTitle className="text-base font-semibold">📦 {project}</CardTitle>
-                <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={close}>✕ Close</Button>
+                <CardTitle className="flex items-center gap-1.5 text-base font-semibold"><HugeiconsIcon icon={PackageIcon} className="size-4" /> {project}</CardTitle>
+                <Button variant="ghost" size="sm" className="h-6 gap-1 px-2 text-xs" onClick={close}><HugeiconsIcon icon={Cancel01Icon} className="size-3" /> Close</Button>
             </div>
             <CardDescription className="text-sm">{sub}</CardDescription>
         </CardHeader>

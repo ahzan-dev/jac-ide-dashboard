@@ -292,7 +292,7 @@ def:pub ReportsPage(env: str, date_from: str, date_to: str, refresh_n: int) -> J
         if cd.get("ok", True) as bool {
             checks_ok_text = checks_ok_text + "✓ " + str(cd.get("name", "")) + " passed — " + str(cd.get("detail", "")) + "  ";
         } else {
-            failed_checks = failed_checks + [{"txt": "⚠ " + str(cd.get("name", "")) + ": " + str(cd.get("detail", ""))}];
+            failed_checks = failed_checks + [{"txt": "Check failed — " + str(cd.get("name", "")) + ": " + str(cd.get("detail", ""))}];
         }
     }
     active_env = str(active.get("env", ""));
@@ -306,9 +306,9 @@ def:pub ReportsPage(env: str, date_from: str, date_to: str, refresh_n: int) -> J
     new_btn_label = "Close" if show_form else "+ New report";
     create_btn_label = "Creating…" if creating else "Create & build";
     rebuild_btn_label = "Building…" if building else "Rebuild";
-    gen_btn_label = "Generating…" if generating else "✨ Generate insights";
+    gen_btn_label = "Generating…" if generating else "Generate insights";
     active_token = str(active.get("share_token", ""));
-    share_btn_label = "Unshare" if active_token != "" else "🔗 Share";
+    share_btn_label = "Unshare" if active_token != "" else "Share";
     if sharing {
         share_btn_label = "…";
     }

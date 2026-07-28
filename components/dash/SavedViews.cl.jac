@@ -2,6 +2,8 @@
 # graph (metrics_sv view_* endpoints) and restore on click, so they follow the
 # account across browsers. Plain buttons (no Popover/portal — those freeze this build).
 sv import from ...metrics_sv { view_list, view_add, view_remove }
+import from "@hugeicons/react" { HugeiconsIcon }
+import from "@hugeicons/core-free-icons" { StarIcon }
 
 def ViewChip(v: any, on_restore: Callable[[any], None], on_remove: Callable[[str], None]) -> JsxElement {
     def cr(e: MouseEvent) { on_restore(v); }
@@ -53,7 +55,7 @@ def:pub SavedViews(page: str, env: str, date_from: str, date_to: str, on_restore
     }
 
     return <div className="flex flex-wrap items-center gap-2">
-        <button onClick={save} className="rounded-md border border-dashed border-border px-2 py-1 text-xs text-muted-foreground hover:text-foreground">★ Save this view</button>
+        <button onClick={save} className="flex items-center gap-1 rounded-md border border-dashed border-border px-2 py-1 text-xs text-muted-foreground hover:text-foreground"><HugeiconsIcon icon={StarIcon} className="size-3" /> Save this view</button>
         {for v in views {
             <ViewChip key={str(v["id"])} v={v} on_restore={do_restore} on_remove={remove} />
         }}

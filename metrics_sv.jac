@@ -15,6 +15,7 @@ Shapes: scalar (value + optional spark series) · series (line/bar) · rows (hba
 import os;
 import re;
 import json;
+import hashlib;
 import time;
 import secrets;
 import asyncio;
@@ -47,6 +48,13 @@ glob ANTH_KEY: str = os.environ.get("ANTHROPIC_API_KEY", "");
 # Right-sized for a 3-4 sentence readout. Override with INSIGHTS_MODEL if desired.
 glob ANTH_MODEL: str = os.environ.get("INSIGHTS_MODEL", "claude-haiku-4-5");
 glob INSIGHT_LLM: Model = Model(model_name=ANTH_MODEL);
+
+# The PLANNER (Ask query planning + report synthesis) is quality-critical — it maps
+# user intent onto metrics/SQL, so it gets a stronger model than the cheap insight
+# prose. Sonnet 4.5 (NOT Sonnet 5/Opus 4.7+ — those reject byllm's injected
+# temperature). Override with PLANNER_MODEL.
+glob PLANNER_MODEL_NAME: str = os.environ.get("PLANNER_MODEL", "claude-sonnet-4-5");
+glob PLANNER_LLM: Model = Model(model_name=PLANNER_MODEL_NAME);
 
 # ---------------------------------------------------------------------------
 # Redis cache (degrades gracefully to no-cache if Redis is unreachable)
@@ -91,7 +99,12 @@ def _cache_get(k: str) -> dict | None {
     if time.time() > (fu as float) {
         return None;
     }
-    d["meta"]["cached"] = True;
+    # Only metric results carry meta; non-metric cache entries (suggestions,
+    # liveness note) have no meta and must not KeyError here.
+    m0 = d.get("meta");
+    if isinstance(m0, dict) {
+        m0["cached"] = True;
+    }
     return d;
 }
 
@@ -1161,6 +1174,7 @@ glob _SCHEMA_DOC: str = "TABLE events — one row per tracked product event.\n"
     + "auth_signup_succeeded (method — password/google/github; signup_trigger — guest_locked_feature/free_signup_bonus/dashboard_prompt/direct; NO 'provider' property) · auth_succeeded (method, is_new_user) · ide_opened · ide_session_ended (duration_active_ms — FOCUSED time not wall-clock; files_touched; previews_run; ended_reason) · project_created (source)\n"
     + "ai_message_sent (prompt_length, attached_files_count, task_category, model, conversation_id, turn_number) · ai_message_completed (duration_ms, files_changed, response_length, model, conversation_id, turn_number, message_id) · ai_message_failed (reason, at_phase, duration_ms, model, conversation_id, turn_number) · ai_message_reverted (conversation_id, turn_number) · ai_response_rated (rating up/down, message_id) · ai_issue_reported (category, message_id) · ai_response_edited (message_id, time_to_edit_ms, files_changed — a manual edit of AI-written code = the real acceptance signal)\n"
     + "AI THREADING: conversation_id + turn_number link a chat thread — first-try success = turn_number=1 with an ai_message_completed and no later turn in the same conversation_id. properties.model is the model that ACTUALLY ran (now on ai_message_completed, not only ai_generation_metered).\n"
+    + "MODEL PROPERTY — EXACT NAME: it is properties.model and NOTHING else. properties.model_name / properties.ai_model / properties.llm do NOT exist — selecting them silently returns blank for every row. When grouping by model, use coalesce(nullIf(toString(properties.model),''),'(blank)') so missing models show honestly as '(blank)'.\n"
     + "preview_start_requested (was_prepared) · preview_ready (duration_ms) · preview_start_failed (reason)\n"
     + "deploy_sandbox_clicked · deploy_sandbox_succeeded (status) · deploy_production_clicked · deploy_production_succeeded (status)\n"
     + "git_commit_succeeded · github_connect_succeeded · project_shared · export_downloaded\n"
@@ -1198,7 +1212,7 @@ sem QueryPlan.title = "A short (<= 6 word) title for the result.";
 sem QueryPlan.reply = "One or two plain-English sentences telling a decision-maker what this shows. No preamble. Empty for clarify.";
 sem QueryPlan.clarify = "mode=clarify ONLY: ONE friendly clarifying question or a short note on what is missing. Empty otherwise.";
 
-def _plan_query(question: str, context: str) -> QueryPlan by INSIGHT_LLM(max_tokens=1400);
+def _plan_query(question: str, context: str) -> QueryPlan by PLANNER_LLM(max_tokens=1400);
 sem _plan_query = "You are the planner for JacHammer's product-analytics dashboard (an AI-powered web IDE). Answer the user's question. FIRST prefer mode=metrics with catalog keys when a verified metric fits (never invent a key). If the question needs a cut the catalog does not have — a specific list, a per-user/per-model/per-project table, a custom breakdown or filter — use mode=query and WRITE a safe read-only HogQL SELECT against the SCHEMA, always including the {env} placeholder in the main WHERE and a LIMIT for lists. Use mode=clarify only when the question is genuinely too vague, off-topic, or impossible with the available events. CRITICAL — TIME WORDS: verified catalog metrics follow the dashboard's SELECTED DATE RANGE (given in the context), NOT any period named in the question. So if the question names a specific period (today, yesterday, this week, this month, last N days, a specific date) that is not identical to the selected range, you MUST use mode=query with an explicit HogQL timestamp filter for exactly that period (see the SCHEMA TIME idioms — today()/yesterday()/now()-INTERVAL/toStartOfWeek), and set chart='stat' for a single count. Do NOT answer a 'today'/'this week' question with a picker-range metric — that returns the whole selected range and silently mislabels it. COMPARISONS: for an explicit 'X vs Y' question (today vs yesterday, this week vs last week, this month vs last month), use mode=query with chart='compare' — SELECT two aggregates in one row (current period first, then the comparison period, each via countIf/sumIf with the matching time predicate) — and set good_up to whether higher is better for that metric. HARD RULE: whenever your query SELECTs the aliases current_value and previous_value, chart MUST be 'compare' — NEVER 'table' or 'stat' (only 'compare' renders the ±% delta). For any latency / duration / response-time comparison, or any 'lower is better' metric (failures, errors, churn, cost, reverts), set good_up=False. HONESTY — CONCEPT GAPS: before mapping a question onto any metric or field, verify the SPECIFIC concept asked about is actually measured, not merely similar wording. Distinctions to respect (the mapping now EXISTS for each — use the right field, don't fall back to the wrong one): request/response LATENCY = properties.duration_ms, whereas session length/time-on-task = ide_session_ended.duration_active_ms (do NOT use duration_ms for session length); acquisition CHANNEL = properties.utm_source/utm_medium/utm_campaign/referrer (NOT login method properties.method); FIRST-TRY success = turn_number=1 ai_message_completed with no later turn in the same conversation_id (NOT the overall completion rate gen_success); a COMPLETED upgrade = upgrade_checkout_succeeded (NOT the intent-only upgrade_checkout_clicked); REVENUE = Stripe MRR (billing summary) or SUM(upgrade_checkout_succeeded.amount_usd) (NOT internal properties.cost_usd). Also verify a property lives on the event you query — properties.model is on BOTH ai_generation_metered AND ai_message_completed now. If a concept genuinely has NO matching event/property, do NOT silently substitute a plausible proxy — use mode=clarify: name the closest honest proxy by its TRUE definition AND state what is not tracked. If you proceed with a proxy, the title/reply must describe it in its own honest terms.";
 sem _plan_query.question = "The user's natural-language question about their product metrics.";
 sem _plan_query.context = "Three sections. SELECTED RANGE: the dashboard's current date window that picker-range metrics use. CATALOG: verified pre-built metrics, one per line as '- key: title — definition [shape]' — for mode=metrics, choose keys only from here. SCHEMA: the events-table columns, available events + props, and HogQL idioms (incl. TIME) — for mode=query, use only what appears here.";
@@ -1371,10 +1385,17 @@ def _save_search(question: str, value: any, kind: str) -> dict {
         if e.question == q {
             prev_v = e.last_value;
             prev_ts = e.last_ts;
+            prev_kind = e.last_kind;
             e.last_value = fval;
             e.last_kind = kind;
             e.last_ts = now;
             e.run_count = e.run_count + 1;
+            # Only comparable when the result SHAPE matches: a previous $-scalar vs a
+            # current row-count produced garbage like "825.1 rows ▼ 4 rows". Shape
+            # changed ⇒ treat as a fresh baseline (no delta label).
+            if prev_kind != kind {
+                return {"prev_value": None, "prev_ts": "", "new_value": fval, "kind": kind, "is_new": True, "run_count": e.run_count};
+            }
             return {"prev_value": prev_v, "prev_ts": prev_ts, "new_value": fval, "kind": kind, "is_new": False, "run_count": e.run_count};
         }
     }
@@ -1431,9 +1452,20 @@ async def:priv suggest_next() -> dict {
             i = i + 1;
         }
     }
+    # Redis-cache keyed on the exact recent-question set: the Ask page calls this
+    # on EVERY mount + after every search, and without this each call was a fresh
+    # byLLM request. Same history ⇒ same suggestions — only a new question pays.
+    joined = "\n".join(lines);
+    ck = "sugg:" + hashlib.md5(joined.encode()).hexdigest();
+    hit = _cache_get(ck);
+    if hit is not None {
+        return {"deeper": hit.get("deeper", []), "related": hit.get("related", []), "different": hit.get("different", [])};
+    }
     try {
-        s = await asyncio.to_thread(_suggest_next, "\n".join(lines), _catalog());
-        return {"deeper": list(s.deeper), "related": list(s.related), "different": list(s.different)};
+        s = await asyncio.to_thread(_suggest_next, joined, _catalog());
+        out = {"deeper": list(s.deeper), "related": list(s.related), "different": list(s.different)};
+        _cache_put(ck, {"deeper": out["deeper"], "related": out["related"], "different": out["different"]});
+        return out;
     } except Exception as e {
         return empty;
     }
@@ -1444,6 +1476,53 @@ async def:priv suggest_next() -> dict {
 # the RENDERED messages as a snapshot (frozen numbers, like a chat log), so
 # reopening shows exactly what was said, not a live re-run.
 # ---------------------------------------------------------------------------
+
+# Thumbs feedback on Ask answers — the prompt-optimization loop: a 'down' vote
+# stores the exact question + what the planner chose (mode/keys/sql) + the reply,
+# so bad answers can be reviewed on the Feedback page and turned into eval
+# scenarios / prompt fixes. Per-user (def:priv → caller's root).
+node AskFeedback {
+    has data: dict = {};    # {ts, rating, question, reply, mode, keys, sql}
+}
+
+def:priv ask_feedback(fb_entry: dict) -> bool {
+    e = fb_entry;
+    item = {
+        "ts": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"),
+        "rating": "down" if str(e.get("rating", "")) == "down" else "up",
+        "question": str(e.get("question", ""))[:400],
+        "reply": str(e.get("reply", ""))[:800],
+        "mode": str(e.get("mode", ""))[:20],
+        "keys": str(e.get("keys", ""))[:200],
+        "sql": str(e.get("sql", ""))[:1200]
+    };
+    root ++> AskFeedback(data=item);
+    return True;
+}
+
+def:priv ask_feedback_list() -> dict {
+    rows = [];
+    ups = 0;
+    downs = 0;
+    entries: list[dict] = [];
+    for f in [root -->][?:AskFeedback] {
+        entries = entries + [f.data];
+    }
+    entries.sort(key=lambda (r: dict) { str(r.get("ts", "")); }, reverse=True);
+    for d in entries {
+        rt = str(d.get("rating", ""));
+        if rt == "up" {
+            ups = ups + 1;
+        } else {
+            downs = downs + 1;
+        }
+        rows = rows + [[str(d.get("ts", "")), rt, str(d.get("mode", "")),
+                        str(d.get("question", "")), str(d.get("reply", ""))[:160],
+                        str(d.get("sql", ""))[:160]]];
+    }
+    return {"columns": ["ts", "rating", "mode", "question", "reply", "sql"],
+            "rows": rows[:200], "ups": ups, "downs": downs, "error": ""};
+}
 
 node Thread {
     has title: str = "New chat";
@@ -1584,6 +1663,101 @@ def:priv view_remove(view_id: str) -> list {
     return view_list();
 }
 
+# Events the planner's schema documents — probed for liveness so the planner can
+# refuse to report a confident 0 from an event that has never fired in prod.
+glob _DOC_EVENT_NAMES: list = [
+    "auth_signup_succeeded", "auth_succeeded", "ide_opened", "ide_session_ended", "project_created",
+    "ai_message_sent", "ai_message_completed", "ai_message_failed", "ai_message_reverted",
+    "ai_response_rated", "ai_issue_reported", "ai_response_edited", "ai_turn_transcript",
+    "preview_start_requested", "preview_ready", "preview_start_failed",
+    "deploy_sandbox_clicked", "deploy_sandbox_succeeded", "deploy_production_clicked", "deploy_production_succeeded",
+    "git_commit_succeeded", "github_connect_succeeded", "project_shared", "export_downloaded",
+    "ai_generation_metered", "upgrade_checkout_clicked", "upgrade_checkout_succeeded",
+    "subscription_canceled", "subscription_downgraded", "topup_checkout_clicked"
+];
+
+"""Cached one-liner listing documented events with ZERO prod rows (14d) — appended
+to the planner context so 'not tracked yet' beats a fake confident zero."""
+def _liveness_note() -> str {
+    ck = "liveness:plannernote";
+    hit = _cache_get(ck);
+    if hit is not None {
+        return str(hit.get("note", ""));
+    }
+    res = event_liveness(_DOC_EVENT_NAMES);
+    if "error" in res {
+        return "";
+    }
+    counts = (res.get("counts", {}) or {}) as dict;
+    dead = [];
+    for k in counts.keys() {
+        if not counts[k] {
+            dead = dead + [str(k)];
+        }
+    }
+    note = "";
+    if dead {
+        note = ("EVENT LIVENESS: these documented events have ZERO production rows in the last 14 days: "
+            + ", ".join(dead)
+            + ". A query against them returns 0/empty because the event has never fired, NOT because the answer is zero — for questions that depend on one, use mode=clarify and say it isn't live yet.");
+    }
+    _cache_put(ck, {"note": note});
+    return note;
+}
+
+# Second-pass narrative for explain-intent questions ("why", "explain", "analyze"):
+# the planner writes the reply BEFORE the data exists, so a real explanation needs
+# one more LLM pass OVER the computed results.
+def _explain_result(question: str, results: str) -> str by PLANNER_LLM(max_tokens=500);
+sem _explain_result = "You are JacHammer's product-analytics assistant. The user asked a question that wants an EXPLANATION, not just a chart. Given the computed results, answer in plain English: 3-6 sentences interpreting the actual numbers — what they show, what stands out, and one honest caveat if the data is thin or a proxy. Cite the specific numbers. No preamble, no bullet points, no markdown.";
+sem _explain_result.question = "The user's original question.";
+sem _explain_result.results = "The computed tiles, one per line: 'title: value' for scalars, or 'title: [first rows]' for tables/series.";
+
+def _tiles_digest(tiles: list) -> str {
+    lines = [];
+    for t in tiles {
+        td = t as dict;
+        dd = (td.get("data", {}) or {}) as dict;
+        ttl = str(td.get("title", ""));
+        v = dd.get("value");
+        if v is not None {
+            unit = str(((dd.get("meta", {}) or {}) as dict).get("unit", ""));
+            lines = lines + [ttl + ": " + str(v) + (" " + unit if unit else "")];
+            continue;
+        }
+        rows = (dd.get("rows", []) or []) as list;
+        if rows {
+            lines = lines + [ttl + " (first rows of " + str(len(rows)) + "): " + str(rows[:5])];
+        } else {
+            sers = (dd.get("series", []) or []) as list;
+            if sers {
+                lines = lines + [ttl + " (trend, last points): " + str(sers[-5:])];
+            }
+        }
+    }
+    return "\n".join(lines);
+}
+
+glob _EXPLAIN_RX: str = r"(?i)\b(explain|why|analy[sz]|interpret|insight|summar|understand|breakdown of what|story|narrat)";
+
+"""Swap the planner's pre-data reply for a post-data narrative when the question
+asks for explanation. Falls back to the original reply on any failure."""
+def _maybe_explain(question: str, reply: str, tiles: list) -> str {
+    if not re.search(_EXPLAIN_RX, question) {
+        return reply;
+    }
+    digest = _tiles_digest(tiles);
+    if not digest {
+        return reply;
+    }
+    try {
+        out = _explain_result(question, digest);
+        return str(out) if out else reply;
+    } except Exception {
+        return reply;
+    }
+}
+
 async def:priv ai_build(question: str, env: str, date_from: str, date_to: str) -> dict {
     if not ANTH_KEY {
         return {"answerable": False, "reply": "", "title": "", "tiles": [], "clarify": "AI planner unavailable — ANTHROPIC_API_KEY is not set on the server."};
@@ -1594,6 +1768,10 @@ async def:priv ai_build(question: str, env: str, date_from: str, date_to: str) -
     }
     env = _clamp_env(env);
     context = "SELECTED RANGE (what picker-range metrics use): " + date_from + " → " + date_to + "\n\nCATALOG:\n" + _catalog() + "\n\nSCHEMA:\n" + _SCHEMA_DOC;
+    lnote = await asyncio.to_thread(_liveness_note);
+    if lnote {
+        context = context + "\n\n" + lnote;
+    }
     try {
         plan = await asyncio.to_thread(_plan_query, q, context);
     } except Exception as e {
@@ -1638,7 +1816,8 @@ async def:priv ai_build(question: str, env: str, date_from: str, date_to: str) -
         }
         hl = _result_headline(tiles);
         chg = _save_search(q, hl["value"], str(hl["kind"]));
-        return {"answerable": True, "reply": str(plan.reply), "title": str(plan.title), "tiles": tiles, "clarify": "",
+        reply2 = await asyncio.to_thread(_maybe_explain, q, str(plan.reply), tiles);
+        return {"answerable": True, "reply": reply2, "title": str(plan.title), "tiles": tiles, "clarify": "",
             "changed": chg,
             "plan": {"mode": "metrics", "reasoning": str(plan.reasoning), "metrics": pk, "sql": ""}};
     }
@@ -1662,7 +1841,8 @@ async def:priv ai_build(question: str, env: str, date_from: str, date_to: str) -
             "recipe": {"kind": "query", "ref": str(plan.sql), "title": ttl, "chart": chart, "good_up": plan.good_up}}];
         hl = _result_headline(qtiles);
         chg = _save_search(q, hl["value"], str(hl["kind"]));
-        return {"answerable": True, "reply": str(plan.reply), "title": ttl, "clarify": "",
+        reply3 = await asyncio.to_thread(_maybe_explain, q, str(plan.reply), qtiles);
+        return {"answerable": True, "reply": reply3, "title": ttl, "clarify": "",
             "tiles": qtiles, "changed": chg,
             "plan": {"mode": "query", "reasoning": str(plan.reasoning), "metrics": [], "sql": str(prep["sql"])}};
     }
@@ -2007,7 +2187,7 @@ sem ReportInsights.summary = "3-5 plain-English sentences summarizing the report
 sem ReportInsights.findings = "3-6 short bullet findings, each citing a specific number and saying why it matters or what action it suggests. Most important first.";
 sem ReportInsights.caveats = "2-4 short honesty caveats a reader must know before acting: data gaps named in the context (blank model rows, proxy metrics, small samples), users-vs-events distinctions, anything that could mislead.";
 
-def _write_report_insights(context: str) -> ReportInsights by INSIGHT_LLM(max_tokens=900);
+def _write_report_insights(context: str) -> ReportInsights by PLANNER_LLM(max_tokens=900);
 sem _write_report_insights = "You are the analytics writer for JacHammer (an AI-powered web IDE). Given a report's frozen, environment-filtered metrics for a specific time window, write the executive readout. Use ONLY numbers present in the context — never invent or extrapolate. HARD RULE: table rows are TRUNCATED SAMPLES — never sum, count, or extrapolate a total from them; totals you may cite are the scalar lines and the 'FULL-TABLE sums' lines only. Findings must each cite a number. Caveats must reflect real limitations visible in the context (e.g. a '(blank)' model row means unattributed spend; users vs events differ where retries exist).";
 sem _write_report_insights.context = "The report: title, window, then one line per section — scalars as 'title: value (delta% vs previous window)', tables as their columns and top rows.";
 

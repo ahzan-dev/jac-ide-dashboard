@@ -3,6 +3,8 @@
 # the numbers are never a frozen snapshot. Pins live in the user's server graph
 # (metrics_sv pin_* endpoints), so they follow the account across browsers.
 sv import from ...metrics_sv { run_pinned, pin_list, pin_remove }
+import from "@hugeicons/react" { HugeiconsIcon }
+import from "@hugeicons/core-free-icons" { PinOffIcon }
 import from ..dash.DynamicTile { DynamicTile }
 import from ..ui.card { Card, CardHeader, CardTitle, CardDescription, CardContent }
 import from ..ui.button { Button }
@@ -22,7 +24,7 @@ def UnpinBtn(idx: int, on_unpin: Callable[[int], None]) -> JsxElement {
     def h(e: MouseEvent) {
         on_unpin(idx);
     }
-    return <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive" onClick={h}>✕ Unpin</Button>;
+    return <Button size="sm" variant="ghost" className="h-6 gap-1 px-2 text-xs text-muted-foreground hover:text-destructive" onClick={h}><HugeiconsIcon icon={PinOffIcon} className="size-3" /> Unpin</Button>;
 }
 
 def:pub PinnedPage(env: str, date_from: str, date_to: str, refresh_n: int) -> JsxElement {
@@ -91,7 +93,7 @@ def:pub PinnedPage(env: str, date_from: str, date_to: str, refresh_n: int) -> Js
             <Card className="w-full">
                 <CardHeader>
                     <CardTitle className="text-base">No pinned tiles yet</CardTitle>
-                    <CardDescription className="text-xs">Go to <span className="font-medium">Ask (AI builder)</span>, build something, and click <span className="font-medium">📌 Pin</span> on a tile. It'll show up here with live data for the selected environment and date range.</CardDescription>
+                    <CardDescription className="text-xs">Click the <span className="font-medium">pin icon</span> on any tile — on the static pages or in <span className="font-medium">Ask (AI builder)</span> — and it shows up here with live data for the selected environment and date range.</CardDescription>
                 </CardHeader>
             </Card>
         }}

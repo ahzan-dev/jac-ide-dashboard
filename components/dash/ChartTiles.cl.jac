@@ -1,4 +1,6 @@
 sv import from ...metrics_sv { pin_add }
+import from "@hugeicons/react" { HugeiconsIcon }
+import from "@hugeicons/core-free-icons" { PinIcon, Alert02Icon }
 import from ..ui.card { Card, CardHeader, CardTitle, CardDescription, CardContent }
 import from ..ui.skeleton { Skeleton }
 import from ..ui.tooltip { Tooltip, TooltipTrigger, TooltipContent }
@@ -67,7 +69,7 @@ def Frame(title: str, data: any, children: any = None, pinnable: bool = True) ->
                     <TooltipContent className="max-w-xs">{_def(data)}</TooltipContent>
                 </Tooltip>
                 {if pinnable and (mkey != "") {
-                    <button className="ml-auto shrink-0 text-xs text-muted-foreground opacity-60 hover:opacity-100 disabled:opacity-100" onClick={on_pin} disabled={pinned} title="Pin to My Dashboard">{"📌✓" if pinned else "📌"}</button>
+                    <button className={"ml-auto shrink-0 " + ("text-primary" if pinned else "text-muted-foreground opacity-60 hover:opacity-100")} onClick={on_pin} disabled={pinned} title={"Pinned to My Dashboard" if pinned else "Pin to My Dashboard"}><HugeiconsIcon icon={PinIcon} className="size-3.5" /></button>
                 }}
             </div>
             {if _win(data) {
@@ -485,7 +487,7 @@ def:pub RetentionTile(title: str, data: any, loading: bool, pinnable: bool = Tru
                                 <TableCell className="text-xs tabular-nums">
                                     {fmt_num(r[1])}
                                     {if (r[1] as float) < 15.0 {
-                                        <Badge variant="outline" className="ml-1 px-1 py-0 text-[9px]">⚠</Badge>
+                                        <Badge variant="outline" className="ml-1 px-1 py-0 text-[9px]" title="Group under 15 people — too small to trust"><HugeiconsIcon icon={Alert02Icon} className="size-2.5" /></Badge>
                                     }}
                                 </TableCell>
                                 {for w in weeks {

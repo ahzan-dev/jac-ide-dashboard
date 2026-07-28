@@ -1,4 +1,6 @@
 sv import from ...metrics_sv { pin_add }
+import from "@hugeicons/react" { HugeiconsIcon }
+import from "@hugeicons/core-free-icons" { PinIcon }
 import from ..ui.card { Card, CardHeader, CardTitle, CardContent }
 import from ..ui.skeleton { Skeleton }
 import from ..ui.tooltip { Tooltip, TooltipTrigger, TooltipContent }
@@ -58,7 +60,7 @@ def:pub StatTile(title: str, data: any, loading: bool, pinnable: bool = True) ->
                         </span>
                     }}
                     {if pinnable and (mkey != "") {
-                        <button className="text-xs text-muted-foreground opacity-60 hover:opacity-100 disabled:opacity-100" onClick={on_pin} disabled={pinned} title="Pin to My Dashboard">{"📌✓" if pinned else "📌"}</button>
+                        <button className={"text-primary" if pinned else "text-muted-foreground opacity-60 hover:opacity-100"} onClick={on_pin} disabled={pinned} title={"Pinned to My Dashboard" if pinned else "Pin to My Dashboard"}><HugeiconsIcon icon={PinIcon} className="size-3.5" /></button>
                     }}
                 </div>
             </div>

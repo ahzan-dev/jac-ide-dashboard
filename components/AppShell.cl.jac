@@ -3,7 +3,7 @@ import from "@hugeicons/react" { HugeiconsIcon }
 import from "@hugeicons/core-free-icons" {
     DashboardSquare01Icon, UserGroupIcon, UserMultiple02Icon, Message01Icon, CheckmarkBadge01Icon,
     Analytics01Icon, PuzzleIcon, DollarCircleIcon, CoinsDollarIcon, Rocket01Icon, Pulse01Icon,
-    Comment01Icon, SparklesIcon, PinIcon, File01Icon, Settings01Icon
+    Comment01Icon, SparklesIcon, PinIcon, File01Icon, Settings01Icon, Clock01Icon
 }
 import from .ui.sidebar {
     SidebarProvider, Sidebar, SidebarContent, SidebarHeader, SidebarGroup,
@@ -206,16 +206,19 @@ def:pub AppShell(on_logout: Callable[[], None]) -> JsxElement {
     for w in windows {
         wd = w as dict;
         nm = str(wd.get("name", ""));
-        win_opts = win_opts + [{"v": "win:" + nm, "label": "🪟 " + nm}];
+        win_opts = win_opts + [{"v": "win:" + nm, "label": nm}];
     }
 
     return <TooltipProvider>
         <SidebarProvider>
             <Sidebar>
                 <SidebarHeader>
-                    <div className="flex items-center gap-2 px-2 py-1.5">
-                        <div className="size-2.5 rounded-full bg-primary"></div>
-                        <span className="text-sm font-semibold">JacHammer Analytics</span>
+                    <div className="flex items-center gap-2.5 px-2 py-1.5">
+                        <img src="/android-chrome-192x192.png" alt="JacHammer logo" className="size-7 shrink-0 rounded-md" />
+                        <div className="flex min-w-0 flex-col leading-tight">
+                            <span className="truncate text-sm font-semibold tracking-wide" style={{"fontFamily": "'Oxanium', sans-serif"}}>JacHammer</span>
+                            <span className="truncate text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Analytics</span>
+                        </div>
                     </div>
                 </SidebarHeader>
                 <SidebarContent>
@@ -291,7 +294,7 @@ def:pub AppShell(on_logout: Callable[[], None]) -> JsxElement {
                     <span className="font-medium text-foreground">{scope_txt}</span>
                     <span>· env = {env} · all times shown in</span>
                     <Select value={tz_value} onValueChange={on_tz}>
-                        <SelectTrigger className="h-6 w-fit gap-1 border-none bg-transparent px-1 text-xs font-medium text-foreground shadow-none">🕒 {tz_label}</SelectTrigger>
+                        <SelectTrigger className="h-6 w-fit gap-1 border-none bg-transparent px-1 text-xs font-medium text-foreground shadow-none"><HugeiconsIcon icon={Clock01Icon} className="size-3.5 shrink-0" /> {tz_label}</SelectTrigger>
                         <SelectContent>
                             <SelectGroup>
                                 <SelectItem value="auto">Device timezone</SelectItem>

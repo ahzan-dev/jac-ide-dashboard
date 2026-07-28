@@ -59,6 +59,31 @@ typescript = "^5.3.3"
 plugins = ["tailwindcss()"]
 lib_imports = ["import tailwindcss from '@tailwindcss/vite'"]
 
+# Served page <head> — title/description/favicon/OG for hosting.
+# Domain assumed dash.jachammer.ai — change og_url/canonical if you host elsewhere.
+# Icons = the favicon.io package in assets/ (served by the root asset route:
+# /favicon.ico, /apple-touch-icon.png etc. resolve from <project>/assets/).
+[client.app_meta_data]
+title = "JacHammer Analytics"
+description = "Internal analytics cockpit for JacHammer — honest, env-filtered product metrics, AI-built dashboards, and reports."
+keywords = "jachammer, analytics, dashboard, jaseci"
+author = "Jaseci Labs"
+theme_color = "#0f172a"
+icon = "/favicon.ico"
+apple_touch_icon = "/apple-touch-icon.png"
+og_title = "JacHammer Analytics"
+og_description = "Internal analytics cockpit for JacHammer."
+og_type = "website"
+og_site_name = "JacHammer Analytics"
+og_url = "https://dash.jachammer.ai"
+canonical = "https://dash.jachammer.ai"
+
+# Hosting hardening: without this, jac-scale signs JWTs with a PUBLIC default key
+# and anyone can forge an admin token. ${JWT_SECRET} errors at boot if unset —
+# deliberate: set it in .env locally and in the host's secret store in prod.
+[scale.jwt]
+secret = "${JWT_SECRET}"
+
 # Run as a single in-process gateway (metrics_sv is imported in-process by main.jac).
 # Without this the scale layer auto-detects metrics_sv + billing_sv as separate
 # microservices and spawns them as subprocesses -> byllm/import crash.

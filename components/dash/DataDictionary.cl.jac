@@ -51,11 +51,25 @@ glob EVENTS: list = [
 ];
 
 # Non-event rows — properties can't be liveness-probed by event name, so these
-# keep a manual status (env tagging shipped to prod 2026-07 → 🟢).
+# keep a manual status (env tagging shipped to prod 2026-07 → live).
 glob PROP_ROWS: list = [
-    {"cat": "Super-prop", "event": "environment", "props": "prod / dev / preview / local", "powers": "The env filter on EVERY query", "status": "🟢"},
-    {"cat": "Person", "event": "plan", "props": "free / builder / pro", "powers": "Tier segment on every chart", "status": "🟢"}
+    {"cat": "Super-prop", "event": "environment", "props": "prod / dev / preview / local", "powers": "The env filter on EVERY query", "status": "live"},
+    {"cat": "Person", "event": "plan", "props": "free / builder / pro", "powers": "Tier segment on every chart", "status": "live"}
 ];
+
+# Status → indicator dot class + label (no emoji — proper colored indicators).
+def _status_view(s: str) -> dict {
+    if s == "live" {
+        return {"dot": "bg-emerald-500", "label": "live"};
+    }
+    if s == "none" {
+        return {"dot": "bg-red-500", "label": "none"};
+    }
+    if s == "pending" {
+        return {"dot": "bg-muted-foreground/40 animate-pulse", "label": "…"};
+    }
+    return {"dot": "bg-amber-500", "label": "?"};
+}
 
 def:pub DataDictionary() -> JsxElement {
     has query: str = "";
@@ -94,26 +108,28 @@ def:pub DataDictionary() -> JsxElement {
             cnt = len(usage.get(str(ev["event"]), []) as list);
             mtxt = "—" if cnt == 0 else str(cnt);
             n14 = (live.get(str(ev["event"]), 0) or 0) as int;
-            status = "…";
+            status = "pending";
             if live_err {
-                status = "?";
+                status = "unknown";
             } elif live {
-                status = "🟢" if n14 > 0 else "🔴";
+                status = "live" if n14 > 0 else "none";
             }
-            row = {"cat": ev["cat"], "event": ev["event"], "props": ev["props"], "powers": ev["powers"], "status": status, "n14": n14, "mtxt": mtxt};
+            sv2 = _status_view(status);
+            row = {"cat": ev["cat"], "event": ev["event"], "props": ev["props"], "powers": ev["powers"], "sdot": sv2["dot"], "slabel": sv2["label"], "n14": n14, "mtxt": mtxt};
             rows = rows + [row];
         }
     }
     for pv in PROP_ROWS {
         blob2 = (str(pv["event"]) + " " + str(pv["cat"]) + " " + str(pv["props"]) + " " + str(pv["powers"])).lower();
         if (not q) or (q in blob2) {
-            rows = rows + [{"cat": pv["cat"], "event": pv["event"], "props": pv["props"], "powers": pv["powers"], "status": pv["status"], "n14": -1, "mtxt": "—"}];
+            sv3 = _status_view(str(pv["status"]));
+            rows = rows + [{"cat": pv["cat"], "event": pv["event"], "props": pv["props"], "powers": pv["powers"], "sdot": sv3["dot"], "slabel": sv3["label"], "n14": -1, "mtxt": "—"}];
         }
     }
 
     # Derived, not hand-counted. Status legend matches the derivation.
     caption = ("The " + str(len(EVENTS)) + " CORE events the dashboard depends on."
-        + (" Status DERIVED live: 🟢 = seen in prod in the last 14 days · 🔴 = zero prod events (14d)." if not live_err else " Status probe unavailable right now (?).")
+        + (" Status DERIVED live: green = seen in prod in the last 14 days · red = zero prod events (14d)." if not live_err else " Status probe unavailable right now.")
         + " '14d' = prod event count behind the status. Full contract: .docs/posthog/EVENT_CATALOG.md."
         + " · 'Metrics' = live count of registry metrics using each event.");
 
@@ -149,7 +165,12 @@ def:pub DataDictionary() -> JsxElement {
                                 <TableCell className="text-xs text-muted-foreground">{str(ev["powers"])}</TableCell>
                                 <TableCell className="text-center text-xs tabular-nums">{str(ev["mtxt"])}</TableCell>
                                 <TableCell className="text-center text-xs tabular-nums">{"—" if (ev["n14"] as int) < 0 else str(ev["n14"])}</TableCell>
-                                <TableCell className="text-center text-xs">{str(ev["status"])}</TableCell>
+                                <TableCell className="text-center text-xs">
+                                    <span className="inline-flex items-center gap-1.5">
+                                        <span className={"size-2 shrink-0 rounded-full " + str(ev["sdot"])}></span>
+                                        <span className="text-muted-foreground">{str(ev["slabel"])}</span>
+                                    </span>
+                                </TableCell>
                             </TableRow>
                         }}
                     </TableBody>

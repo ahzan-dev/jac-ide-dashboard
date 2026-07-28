@@ -51,7 +51,7 @@ def:pub QualityPage(env: str, date_from: str, date_to: str, refresh_n: int) -> J
         <div className="col-span-12 lg:col-span-4"><BarsTile title="Top failure reasons" data={data["ai_fail_reasons"]} loading={loading} /></div>
 
         <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="First-try success" data={data["first_try_success"]} loading={loading} /></div>
-        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Helpful rate (👍)" data={data["rating_ratio"]} loading={loading} /></div>
+        <div className="col-span-12 sm:col-span-6 lg:col-span-3"><StatTile title="Helpful rate (thumbs up)" data={data["rating_ratio"]} loading={loading} /></div>
 
         <div className="col-span-12 lg:col-span-6"><BarsTile title="Response time by model" data={data["model_latency"]} loading={loading} /></div>
         <div className="col-span-12 lg:col-span-6"><LineTile title="Helpful rate over time" data={data["rating_weekly"]} loading={loading} /></div>
