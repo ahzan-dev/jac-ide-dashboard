@@ -1,10 +1,11 @@
 project_id,email,runs,total_usd,models,byok_runs
-44090311-4bd8-4f29-9348-091c7ecb388f,justin-kang@berkeley.edu,18,86.3122,"['', 'claude-opus-4-6']",0
-prj_b180bd849abe4731b391c1dd585be000,,4,26.6956,"['', 'claude-sonnet-4-6']",0
+44090311-4bd8-4f29-9348-091c7ecb388f,justin-kang@berkeley.edu,33,148.9541,"['', 'claude-opus-4-6']",0
+3296f689-9bf7-44b2-bb76-171ca01186a3,stevenyang.dev@gmail.com,7,72.4479,"['', 'claude-sonnet-4-6', 'claude-opus-4-6']",0
+prj_b180bd849abe4731b391c1dd585be000,,6,35.1901,"['', 'claude-sonnet-4-6']",0
 prj_9408e7836d3240fcb14fa6ae0caa0453,toledosean@gmail.com,19,19.975,"['', 'claude-sonnet-4-6', 'claude-opus-4-6']",0
-3296f689-9bf7-44b2-bb76-171ca01186a3,stevenyang.dev@gmail.com,4,18.6177,"['claude-sonnet-4-6', 'claude-opus-4-6']",0
 prj_07924aa5d8844a4c92ec1db23476ff4a,jacob.a.quion@gmail.com,12,15.2094,"['', 'claude-sonnet-4-6']",0
 prj_b88f4c0b585642c899688ce48603ea48,kshitijkumar3@gmail.com,11,14.0952,"['', 'claude-sonnet-4-6', 'claude-opus-4-6']",0
+fe8b9d27-9f88-4952-bdab-74f6301cb298,kshitijatus@gmail.com,10,13.9831,['claude-opus-4-6'],0
 prj_4a221e53ef884270ad1424fee9f41f90,sahasrakokkula77@gmail.com,12,12.1694,['claude-sonnet-4-6'],0
 fa325ad8-92a1-460b-bebc-6e41d0744990,philipnisevich@gmail.com,4,11.7631,['claude-sonnet-4-6'],0
 prj_4f409ce952ed458ebf2627aa06c44fad,enochfyw@gmail.com,7,10.5325,['claude-sonnet-4-6'],0
@@ -14,45 +15,60 @@ prj_154ea02e80f04b71877b98956e565c12,kakanisnehil@gmail.com,2,8.2761,['claude-so
 prj_d071db4af98d4fe1a789f8c1bb45b0e6,umangshankar10@gmail.com,2,7.4295,['claude-sonnet-4-6'],0
 prj_7782ae176a0f4d33bbee7296d3956151,stepodkelly@gmail.com,1,7.3752,[''],0
 prj_ce4dd6df91864d219f2baa8910a1d9ea,toledosean@gmail.com,1,7.337,['claude-opus-4-6'],0
+prj_36eb9b5db1be4be39f04ac6563777c3c,,4,6.5363,['claude-sonnet-4-6'],0
 730ceb72-ce18-4665-aeb1-94ca18c2a89c,clai74@mail.ccsf.edu,2,6.0836,['claude-sonnet-4-6'],0
 prj_826a6397e8994cdf9b1284c5daf5d5ac,amyhsieh3730@gmail.com,1,5.8299,['claude-sonnet-4-6'],0
+aa8d4bef-a2f4-4f6d-8e63-8f3b68f7ac8e,benjinisevich2@gmail.com,12,5.3748,['claude-sonnet-4-6'],0
 prj_6d60ee35c5824b948b8c4dddff7c74e6,owin@owinrojas.com,2,4.8246,"['claude-sonnet-4-6', 'claude-opus-4-6']",0
 fa55ae9f-922d-4eff-ae70-bf6acb005dbb,mborgiottitulane@gmail.com,2,4.8148,['claude-sonnet-4-6'],0
 prj_51062113208340d5befa46d932c1d25e,,10,4.4899,['claude-sonnet-4-6'],0
 prj_e221843d682c48b1a60cff3283d0d81c,kewinszlezingier@gmail.com,1,4.2284,['claude-sonnet-4-6'],0
 prj_dafde1251b6940458b46b6227142a03f,misha@mypipdev.com,3,4.1992,['claude-sonnet-4-6'],0
+prj_c650bb9fe85c46129b6250e1e9103c2e,,4,4.137,['claude-sonnet-4-6'],0
+8537287b-c8a9-4cbc-bb5f-3d17146dd750,phongct1105@gmail.com,6,4.1172,"['', 'claude-sonnet-4-6']",0
 prj_794da3117b7b446bb859f76773f4882a,amberkaurtoor@gmail.com,2,4.1081,['claude-sonnet-4-6'],0
 prj_715a659716294948bf46a6425577322c,schan119@calpoly.edu,2,4.0432,['claude-sonnet-4-6'],0
 prj_3c602ac0e7c845da83a5c97fa9563637,yujiwork@outlook.com,4,4.0041,['claude-sonnet-4-6'],0
 prj_26b13de9412d40c9976e06c441f7197e,nagatarunmoturi@gmail.com,12,3.9297,['claude-sonnet-4-6'],0
-prj_c650bb9fe85c46129b6250e1e9103c2e,,1,3.4091,['claude-sonnet-4-6'],0
 prj_4a420277e75948f8a54a6326131e7ebc,sohamjani8@gmail.com,2,3.1781,['gpt-5.4'],0
+52346906-65af-4401-87d9-210a31892a01,rishabh.rb@icloud.com,4,3.124,['claude-sonnet-4-6'],0
+31481e39-df1c-4bfc-b2f0-0f9d983d2e14,umangshankar10@gmail.com,1,3.107,['claude-sonnet-4-6'],0
+6493a4ed-eb46-4283-9b74-c40698d83caa,atharavhedage@gmail.com,2,3.0509,['claude-sonnet-4-6'],0
+ee265c54-63cd-4a05-90a1-f79c99287fba,Matthew.you.2520@gmail.com,1,3.0374,['claude-sonnet-4-6'],0
 prj_12917802ae254e84b005def4535aeaef,nagatarunmoturi@gmail.com,4,2.7678,['claude-sonnet-4-6'],0
 prj_97639f12bbf345a09ee342fede643ac6,owin@owinrojas.com,1,2.7536,['claude-opus-4-6'],0
 b02be0c1-41f9-4b64-bd16-92af548b6460,ryanxu240@gmail.com,2,2.7447,"['', 'claude-sonnet-4-6']",0
-aa8d4bef-a2f4-4f6d-8e63-8f3b68f7ac8e,benjinisevich2@gmail.com,4,2.7097,['claude-sonnet-4-6'],0
 cea6e72d-3cf1-4e43-bfa1-3bad217a1f8f,142857tom@gmail.com,3,2.6222,['claude-sonnet-4-6'],0
+8c32b563-ccaa-4bb0-8ffa-b135bbf688d1,arshmeetsodhi@gmail.com,3,2.4691,['claude-sonnet-4-6'],0
 35b02362-40b1-4e47-8bc8-2691f01f8f98,benjinisevich2@gmail.com,1,2.4236,['claude-sonnet-4-6'],0
 prj_4cb223a06d044e3884571a1a9db05c15,manidweepsharma1801@gmail.com,5,2.381,"['claude-sonnet-4-6', 'gpt-5.2']",0
 3a4b96ec-339b-4a92-833f-94048883eb44,wanzelin007@gmail.com,1,2.3367,[''],0
-52346906-65af-4401-87d9-210a31892a01,rishabh.rb@icloud.com,2,2.1959,['claude-sonnet-4-6'],0
+2964fe6f-019c-491d-9f48-33694692f01e,neil_shah@my.cuesta.edu,3,2.3183,['claude-sonnet-4-6'],0
 prj_1fd2a79470114b5b852f5d14a3508009,toledosean@gmail.com,1,2.1637,['claude-opus-4-6'],0
-prj_36eb9b5db1be4be39f04ac6563777c3c,,3,1.5476,['claude-sonnet-4-6'],0
+prj_7f47a9f20bd94002b1f0e429add9e952,,2,2.1556,['claude-sonnet-4-6'],0
+d0698e37-e8f0-4255-83a3-02c9c3538473,praniil.nagaraj@gmail.com,1,1.6746,['claude-opus-4-6'],0
+dccc4223-c2a9-4dea-8f36-9499b046eef6,fkw155@mun.ca,1,1.3164,['claude-sonnet-4-6'],0
+8a3b0c74-939b-41ee-bd4b-7ed78557ab9d,,1,1.2764,[''],0
 e5fccb47-d2f2-4430-97a0-88f20bb10eb7,amyhsieh3730@gmail.com,1,1.1696,['claude-sonnet-4-6'],0
-fe8b9d27-9f88-4952-bdab-74f6301cb298,kshitijatus@gmail.com,1,1.1246,['claude-opus-4-6'],0
+prj_e0a8e92dbfa14efebfe76d073967ae58,sahilnale@icloud.com,5,1.1064,"['', 'claude-sonnet-4-6']",0
+61534301-1c76-4ab0-ac67-8e6892249c37,aakashryback@gmail.com,1,1.0063,['claude-sonnet-4-6'],0
 prj_d320c0b34bd54ff0b5cf05e31219765c,tiwari.aadi123@gmail.com,1,0.8645,['claude-sonnet-4-6'],0
+c63e2036-d757-4dcc-bd2f-687ef5b54cc5,walterchen.ca@gmail.com,1,0.7677,['claude-sonnet-4-6'],0
 prj_3dfb58dc3ca8426e942cc2306d8b7b85,likhith11ramesh@gmail.com,4,0.6806,"['claude-opus-4-5-20251101', 'gpt-5.2']",1
+f84bedd1-4803-4190-b89c-c72f7deffdfe,samrocksnature@gmail.com,1,0.3223,['claude-sonnet-4-6'],0
 prj_465443b9ab494e4b9cfc467954362ac0,Ryanandnoahlee@gmail.com,3,0.236,['claude-sonnet-4-6'],0
 prj_f66b714e163345618972deabd55a5407,toledosean@gmail.com,1,0.1852,['claude-opus-4-6'],0
-prj_e0a8e92dbfa14efebfe76d073967ae58,sahilnale@icloud.com,4,0.1766,['claude-sonnet-4-6'],0
 prj_51a8b847823248a093dcdbf1067a9a6b,aneeshpradhan@acm.org,1,0.121,['claude-sonnet-4-6'],0
 63389cd5-92cf-45f5-b3eb-325d934e47bb,harshjannawar14@gmail.com,1,0.1088,['claude-sonnet-4-6'],0
 30ca70e5-76b0-491c-bf8b-98bebafb3efd,chengreric@gmail.com,2,0.1072,['claude-sonnet-4-6'],0
 34dbf079-fc90-41f4-968e-036f650caa81,benjinisevich2@gmail.com,1,0.0935,['claude-sonnet-4-6'],0
+6ea9e44e-bc7f-465b-94a6-5044f8507a6f,jczhang223@gmail.com,1,0.0844,['claude-sonnet-4-6'],0
 prj_d2953e5b401b46e7bbb69676b77c602a,cajuliawan@gmail.com,1,0.0707,['claude-sonnet-4-6'],0
+47d22643-2cf7-4828-88f5-be4eb756755f,visheshv05@gmail.com,1,0.0662,['claude-sonnet-4-6'],0
 prj_55c6fa88a091493592ad068707740160,cajuliawan@gmail.com,1,0.0606,['claude-sonnet-4-6'],0
 240f17e1-96dc-45eb-86f8-9032fa60ce02,samrocksnature@gmail.com,1,0.0558,['claude-sonnet-4-6'],0
 c1e560cb-557a-4a72-abad-e5b7476b8810,lee.anastasia.y@gmail.com,1,0.0385,['claude-sonnet-4-6'],0
 prj_8b6bccf2526f4b59aa02df3d39b1bc76,manidweepsharma1801@gmail.com,1,0.0306,['claude-sonnet-4-6'],0
-prj_4620f251f9ab4774b9aa1a1d2f70b200,toledosean@gmail.com,1,0.0253,['claude-sonnet-4-6'],0
 prj_3f1220f275a5465f91ddb4c885d651ac,mp@gmail.com,1,0.0253,['claude-sonnet-4-6'],0
+258b2fdb-8331-4a4f-8afd-0db2894bc376,ayaan.chawla@gmail.com,1,0.0253,['claude-sonnet-4-6'],0
+prj_4620f251f9ab4774b9aa1a1d2f70b200,toledosean@gmail.com,1,0.0253,['claude-sonnet-4-6'],0

@@ -102,3 +102,72 @@ ts,event,distinct_id,email,reason,phase,model,duration_ms
 2026-07-27 00:22:57.650000,ai_user_aborted,ea626e57-caa8-449c-97b5-41128e9626df,,,,,0.0
 2026-07-27 00:23:39.709000,ai_message_failed,ea626e57-caa8-449c-97b5-41128e9626df,,A turn is already in progress for this project; wait for it to finish.,queue,,627.0
 2026-07-27 00:24:09.037000,ai_message_failed,ea626e57-caa8-449c-97b5-41128e9626df,,A turn is already in progress for this project; wait for it to finish.,queue,,1752.0
+2026-07-27 00:32:14.841000,preview_start_failed,67ad358e-eddf-4855-8903-5a52ae7b247a,wanzelin007@gmail.com,http_start_failed,http_response,,
+2026-07-27 00:32:44.071000,preview_start_failed,67ad358e-eddf-4855-8903-5a52ae7b247a,wanzelin007@gmail.com,http_start_failed,http_response,,
+2026-07-27 00:35:48.032000,ai_user_aborted,ea626e57-caa8-449c-97b5-41128e9626df,,,,,480198.0
+2026-07-27 01:07:25.274000,ai_user_aborted,b624b54c-7092-4352-a93d-3bfe2867c601,arshmeetsodhi@gmail.com,,,,112904.0
+2026-07-27 01:09:26.896000,ai_message_failed,b624b54c-7092-4352-a93d-3bfe2867c601,arshmeetsodhi@gmail.com,A turn is already in progress for this project; wait for it to finish.,queue,claude-sonnet-4-6,120333.0
+2026-07-27 01:12:23.254000,preview_start_failed,b624b54c-7092-4352-a93d-3bfe2867c601,arshmeetsodhi@gmail.com,TypeError: Load failed,http_response,,
+2026-07-27 01:14:17.442000,preview_start_failed,b624b54c-7092-4352-a93d-3bfe2867c601,arshmeetsodhi@gmail.com,http_start_failed,http_response,,
+2026-07-27 01:14:56.742000,preview_start_failed,b624b54c-7092-4352-a93d-3bfe2867c601,arshmeetsodhi@gmail.com,http_start_failed,http_response,,
+2026-07-27 01:20:03.896000,preview_start_failed,386d4dde-04e2-4308-be8c-9cd2da76529e,phongct1105@gmail.com,http_start_failed,http_response,,
+2026-07-27 01:21:00.193000,preview_start_failed,386d4dde-04e2-4308-be8c-9cd2da76529e,phongct1105@gmail.com,"Exception: Walker preview_control failed: <html>
+<head><title>504 Gateway Time-out</title></head>
+<body>
+<center><h1>504 Gateway Time-out</h1></center>
+</body>
+</html>
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+",http_response,,
+2026-07-27 01:23:28.688000,preview_start_failed,67ad358e-eddf-4855-8903-5a52ae7b247a,wanzelin007@gmail.com,http_start_failed,http_response,,
+2026-07-27 01:26:34.132000,preview_start_failed,3bb9fb98-c90f-4395-ae5c-3961b217f805,cajuliawan@gmail.com,http_start_failed,http_response,,
+2026-07-27 01:26:59.717000,preview_start_failed,3bb9fb98-c90f-4395-ae5c-3961b217f805,cajuliawan@gmail.com,TypeError: Failed to fetch,http_response,,
+2026-07-27 01:26:59.718000,preview_start_failed,3bb9fb98-c90f-4395-ae5c-3961b217f805,cajuliawan@gmail.com,TypeError: Failed to fetch,http_response,,
+2026-07-27 01:29:06.985000,ai_message_failed,43c7c7ca-f19b-46ee-aa95-76eaffb14bbc,benjinisevich2@gmail.com,TypeError: Failed to fetch,queue,claude-sonnet-4-6,16514.0
+2026-07-27 01:34:06.577000,preview_start_failed,9e0dbb52-9511-462d-b537-6ead93ffe013,samrocksnature@gmail.com,http_start_failed,http_response,,
+2026-07-27 01:34:28.461000,ai_message_failed,43c7c7ca-f19b-46ee-aa95-76eaffb14bbc,benjinisevich2@gmail.com,TypeError: Failed to fetch,queue,claude-sonnet-4-6,10009.0
+2026-07-27 01:34:40.478000,preview_start_failed,386d4dde-04e2-4308-be8c-9cd2da76529e,phongct1105@gmail.com,http_start_failed,http_response,,
+2026-07-27 01:36:45.864000,preview_start_failed,3bb9fb98-c90f-4395-ae5c-3961b217f805,cajuliawan@gmail.com,http_start_failed,http_response,,
+2026-07-27 01:36:59.859000,ai_message_failed,43c7c7ca-f19b-46ee-aa95-76eaffb14bbc,benjinisevich2@gmail.com,TypeError: Failed to fetch,queue,claude-sonnet-4-6,43079.0
+2026-07-27 01:37:52.231000,preview_start_failed,ba874ab0-42f1-4eac-8857-848b97474796,visheshv05@gmail.com,http_start_failed,http_response,,
+2026-07-27 01:41:28.167000,ai_message_failed,43c7c7ca-f19b-46ee-aa95-76eaffb14bbc,benjinisevich2@gmail.com,"This build was interrupted by a server restart. Files written so far are saved, but the agent does not remember this turn. Tell it what you want next and it will pick up from the files on disk.",agent,claude-sonnet-4-6,132707.0
+2026-07-27 01:43:01.278000,preview_start_failed,dd04d35a-e742-430e-a023-f5f5574e0485,atharavhedage@gmail.com,http_start_failed,http_response,,
+2026-07-27 01:45:39.628000,preview_start_failed,1f45f5fc-09df-44ca-92f5-d8c83337c310,stevenyang.dev@gmail.com,"Exception: Walker preview_control failed: <html>
+<head><title>504 Gateway Time-out</title></head>
+<body>
+<center><h1>504 Gateway Time-out</h1></center>
+</body>
+</html>
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+",http_response,,
+2026-07-27 01:45:42.892000,preview_start_failed,1f45f5fc-09df-44ca-92f5-d8c83337c310,stevenyang.dev@gmail.com,http_start_failed,http_response,,
+2026-07-27 01:51:27.033000,ai_message_failed,43c7c7ca-f19b-46ee-aa95-76eaffb14bbc,benjinisevich2@gmail.com,Agent did not respond. Please try again.,agent,claude-sonnet-4-6,416326.0
+2026-07-27 02:00:22.481000,ai_message_failed,c8303677-ed59-4b07-843b-a4dfd8c5aa3e,justin-kang@berkeley.edu,A turn is already in progress for this project; wait for it to finish.,queue,claude-opus-4-6,1143.0
+2026-07-27 02:00:35.521000,ai_message_failed,c8303677-ed59-4b07-843b-a4dfd8c5aa3e,justin-kang@berkeley.edu,A turn is already in progress for this project; wait for it to finish.,queue,claude-opus-4-6,342.0
+2026-07-27 02:00:45.591000,ai_message_failed,c8303677-ed59-4b07-843b-a4dfd8c5aa3e,justin-kang@berkeley.edu,A turn is already in progress for this project; wait for it to finish.,queue,claude-opus-4-6,689.0
+2026-07-27 02:01:17.721000,ai_message_failed,c8303677-ed59-4b07-843b-a4dfd8c5aa3e,justin-kang@berkeley.edu,A turn is already in progress for this project; wait for it to finish.,queue,claude-opus-4-6,256.0
+2026-07-27 02:01:26.503000,ai_message_failed,c8303677-ed59-4b07-843b-a4dfd8c5aa3e,justin-kang@berkeley.edu,A turn is already in progress for this project; wait for it to finish.,queue,claude-opus-4-6,687.0
+2026-07-27 02:01:27.713000,preview_start_failed,c8303677-ed59-4b07-843b-a4dfd8c5aa3e,justin-kang@berkeley.edu,TypeError: Failed to fetch,http_response,,
+2026-07-27 02:02:40.089000,preview_start_failed,516f2060-07a9-46a4-adac-97e45b2eb97a,kshitijatus@gmail.com,"Exception: Walker preview_control failed: <html>
+<head><title>504 Gateway Time-out</title></head>
+<body>
+<center><h1>504 Gateway Time-out</h1></center>
+</body>
+</html>
+",http_response,,
+2026-07-27 02:06:20.796000,ai_user_aborted,a0249d80-6f43-488c-b4f8-f685f0f951b5,praniil.nagaraj@gmail.com,,,,591947.0
+2026-07-27 02:07:11.589000,ai_user_aborted,c8303677-ed59-4b07-843b-a4dfd8c5aa3e,justin-kang@berkeley.edu,,,,30891.0
+2026-07-27 02:08:39.274000,ai_message_failed,c8303677-ed59-4b07-843b-a4dfd8c5aa3e,justin-kang@berkeley.edu,Agent did not respond. Please try again.,agent,claude-opus-4-6,118731.0
+2026-07-27 02:20:05.563000,ai_message_blocked_quota,a0249d80-6f43-488c-b4f8-f685f0f951b5,praniil.nagaraj@gmail.com,Model 'claude-sonnet-5' is not available on pro.,,,
+2026-07-27 02:21:36.342000,ai_message_blocked_quota,a0249d80-6f43-488c-b4f8-f685f0f951b5,praniil.nagaraj@gmail.com,Model 'claude-sonnet-5' is not available on pro.,,,
+2026-07-27 02:47:43.084000,ai_message_blocked_quota,a0249d80-6f43-488c-b4f8-f685f0f951b5,praniil.nagaraj@gmail.com,Model 'claude-sonnet-5' is not available on pro.,,,
