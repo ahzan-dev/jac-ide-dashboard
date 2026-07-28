@@ -39,23 +39,23 @@ def Frame(title: str, data: any, children: any = None) -> JsxElement {
     return <Card className="flex h-full w-full flex-col">
         <CardHeader className="pb-2">
             <div className="flex items-center gap-1.5">
-                <CardTitle className="text-sm font-medium">{title}</CardTitle>
+                <CardTitle className="text-base font-semibold">{title}</CardTitle>
                 <Tooltip>
                     <TooltipTrigger className="grid size-4 place-items-center rounded-full border border-border text-[10px] leading-none text-muted-foreground">?</TooltipTrigger>
                     <TooltipContent className="max-w-xs">{_def(data)}</TooltipContent>
                 </Tooltip>
             </div>
             {if _win(data) {
-                <CardDescription className="text-xs">{_win(data)}</CardDescription>
+                <CardDescription className="text-sm">{_win(data)}</CardDescription>
             }}
         </CardHeader>
         <CardContent className="flex flex-1 flex-col gap-2">
             {children}
             {if _err(data) {
-                <p className="text-xs text-destructive">n/a — {_err(data)}</p>
+                <p className="text-sm text-destructive">n/a — {_err(data)}</p>
             }}
             {if _cav(data) {
-                <p className="text-[11px] leading-tight text-muted-foreground">{_cav(data)}</p>
+                <p className="text-xs leading-snug text-muted-foreground">{_cav(data)}</p>
             }}
         </CardContent>
     </Card>;
@@ -72,8 +72,8 @@ def:pub LineTile(title: str, data: any, loading: bool) -> JsxElement {
             <ChartContainer config={{"y": {"label": title, "color": "var(--chart-1)"}}} className="aspect-auto h-44 w-full">
                 <LineChart data={series} margin={{"top": 8, "right": 8, "bottom": 0, "left": -6}}>
                     <CartesianGrid vertical={False} strokeDasharray="3 3" />
-                    <XAxis dataKey="x" tickLine={False} axisLine={False} minTickGap={28} fontSize={10} tickFormatter={short_date} />
-                    <YAxis tickLine={False} axisLine={False} width={40} fontSize={10} />
+                    <XAxis dataKey="x" tickLine={False} axisLine={False} minTickGap={28} fontSize={11} tickFormatter={short_date} />
+                    <YAxis tickLine={False} axisLine={False} width={40} fontSize={11} />
                     <ChartTooltip content={<ChartTooltipContent />} />
                     {for (ani, an) in enumerate(annots) {
                         <ReferenceArea key={"ln" + str(ani)} x1={str(an["x1"])} x2={str(an["x2"])} fill="var(--chart-1)" fillOpacity={0.07} strokeOpacity={0} label={str(an["name"])} />
@@ -96,8 +96,8 @@ def:pub AreaTile(title: str, data: any, loading: bool) -> JsxElement {
             <ChartContainer config={{"y": {"label": title, "color": "var(--chart-1)"}}} className="aspect-auto h-44 w-full">
                 <AreaChart data={series} margin={{"top": 8, "right": 8, "bottom": 0, "left": -6}}>
                     <CartesianGrid vertical={False} strokeDasharray="3 3" />
-                    <XAxis dataKey="x" tickLine={False} axisLine={False} minTickGap={28} fontSize={10} tickFormatter={short_date} />
-                    <YAxis tickLine={False} axisLine={False} width={40} fontSize={10} />
+                    <XAxis dataKey="x" tickLine={False} axisLine={False} minTickGap={28} fontSize={11} tickFormatter={short_date} />
+                    <YAxis tickLine={False} axisLine={False} width={40} fontSize={11} />
                     <ChartTooltip content={<ChartTooltipContent />} />
                     {for (ani, an) in enumerate(annots) {
                         <ReferenceArea key={"an" + str(ani)} x1={str(an["x1"])} x2={str(an["x2"])} fill="var(--chart-1)" fillOpacity={0.07} strokeOpacity={0} label={str(an["name"])} />
@@ -219,8 +219,8 @@ def:pub StackBarTile(title: str, data: any, loading: bool) -> JsxElement {
                 <ChartContainer config={{}} className="aspect-auto h-44 w-full">
                     <BarChart data={cdata} margin={{"top": 8, "right": 8, "bottom": 0, "left": -6}}>
                         <CartesianGrid vertical={False} strokeDasharray="3 3" />
-                        <XAxis dataKey="x" tickLine={False} axisLine={False} minTickGap={20} fontSize={10} tickFormatter={short_date} />
-                        <YAxis tickLine={False} axisLine={False} width={40} fontSize={10} />
+                        <XAxis dataKey="x" tickLine={False} axisLine={False} minTickGap={20} fontSize={11} tickFormatter={short_date} />
+                        <YAxis tickLine={False} axisLine={False} width={40} fontSize={11} />
                         <ChartTooltip content={<ChartTooltipContent />} />
                         {for b in bars {
                             <Bar key={b["name"]} dataKey={b["name"]} stackId="a" fill={b["color"]} />
@@ -250,8 +250,8 @@ def:pub VBarTile(title: str, data: any, loading: bool) -> JsxElement {
             <ChartContainer config={{"y": {"label": title, "color": "var(--chart-1)"}}} className="aspect-auto h-44 w-full">
                 <BarChart data={series} margin={{"top": 8, "right": 8, "bottom": 0, "left": -6}}>
                     <CartesianGrid vertical={False} strokeDasharray="3 3" />
-                    <XAxis dataKey="x" tickLine={False} axisLine={False} minTickGap={12} fontSize={10} tickFormatter={axis_tick} />
-                    <YAxis tickLine={False} axisLine={False} width={40} fontSize={10} />
+                    <XAxis dataKey="x" tickLine={False} axisLine={False} minTickGap={12} fontSize={11} tickFormatter={axis_tick} />
+                    <YAxis tickLine={False} axisLine={False} width={40} fontSize={11} />
                     <ChartTooltip content={<ChartTooltipContent />} />
                     <Bar dataKey="y" fill="var(--color-y)" radius={[3, 3, 0, 0]} />
                 </BarChart>
@@ -285,7 +285,7 @@ def:pub TableTile(title: str, data: any, loading: bool) -> JsxElement {
 def:pub Banner(text: str) -> JsxElement {
     return <Card className="w-full">
         <CardContent className="py-3">
-            <p className="text-xs text-muted-foreground">{text}</p>
+            <p className="text-sm leading-relaxed text-muted-foreground">{text}</p>
         </CardContent>
     </Card>;
 }

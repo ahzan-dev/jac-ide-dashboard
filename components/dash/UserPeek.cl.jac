@@ -51,7 +51,7 @@ def:pub MiniTable(block: dict) -> JsxElement {
             <TableHeader>
                 <TableRow>
                     {for h in heads {
-                        <TableHead key={h} className="text-[11px]">{h}</TableHead>
+                        <TableHead key={h} className="text-xs">{h}</TableHead>
                     }}
                 </TableRow>
             </TableHeader>
@@ -62,7 +62,7 @@ def:pub MiniTable(block: dict) -> JsxElement {
                 {for fr in frows {
                     <TableRow key={str(fr["k"])}>
                         {for cc in fr["cells"] {
-                            <TableCell key={str(cc["k"])} className="text-xs">{str(cc["v"])}</TableCell>
+                            <TableCell key={str(cc["k"])} className="text-sm">{str(cc["v"])}</TableCell>
                         }}
                     </TableRow>
                 }}
@@ -101,15 +101,27 @@ def:pub UserPeek(user: str, env: str, on_close: Callable[[], None]) -> JsxElemen
     stats: list = [];
     for k in ["signed_up", "projects", "ai_turns", "ai_done", "ai_failed", "cost_usd", "previews", "deploys_ok", "deploys_failed", "gh_ok", "upgrades"] {
         v = summ.get(k);
-        stats = stats + [{"k": k.replace("_", " "), "v": "0" if v is None else str(v)}];
+        vs = str(v);
+        stats = stats + [{"k": k.replace("_", " "), "v": "0" if (v is None) or (vs == "undefined") or (vs == "null") else vs}];
     }
     err = str(d.get("error", ""));
+    replays: list = [];
+    rb = d.get("replays", {}) as dict;
+    for rr in (rb.get("rows", []) as list) {
+        rl = rr as list;
+        if len(rl) == 3 {
+            replays = replays + [{
+                "label": "▶ " + str(rl[0]) + " UTC · " + str(rl[1]) + "s",
+                "href": "https://us.posthog.com/project/425465/replay/" + str(rl[2])
+            }];
+        }
+    }
 
     return <Card className="mt-2 border-primary/30">
         <CardHeader className="pb-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                    <CardTitle className="text-sm">👤 {ident}</CardTitle>
+                    <CardTitle className="text-base font-semibold">👤 {ident}</CardTitle>
                     {if (dn != "") and (dn != ident) {
                         <span className="text-xs text-muted-foreground">({dn})</span>
                     }}
@@ -119,7 +131,7 @@ def:pub UserPeek(user: str, env: str, on_close: Callable[[], None]) -> JsxElemen
                 </div>
                 <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={close}>✕ Close</Button>
             </div>
-            <CardDescription className="text-[11px]">{sub} · drill-down window: last 30 days · env: {env}</CardDescription>
+            <CardDescription className="text-sm">{sub} · drill-down window: last 30 days · env: {env}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
             {if loading {
@@ -132,22 +144,33 @@ def:pub UserPeek(user: str, env: str, on_close: Callable[[], None]) -> JsxElemen
                     <div className="flex flex-wrap gap-2">
                         {for (si, st) in enumerate(stats) {
                             <div key={"st" + str(si)} className="rounded-md border border-border px-2 py-1">
-                                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{str(st["k"])} </span>
-                                <span className="text-xs font-semibold tabular-nums">{str(st["v"])}</span>
+                                <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{str(st["k"])} </span>
+                                <span className="text-sm font-semibold tabular-nums">{str(st["v"])}</span>
                             </div>
                         }}
                     </div>
                     <div className="grid grid-cols-12 gap-3">
                         <div className="col-span-12 lg:col-span-4">
-                            <p className="mb-1 text-[11px] font-medium text-muted-foreground">Cost by model (30d)</p>
+                            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cost by model (30d)</p>
                             <MiniTable block={d.get("models", {}) as dict} />
                         </div>
                         <div className="col-span-12 lg:col-span-8">
-                            <p className="mb-1 text-[11px] font-medium text-muted-foreground">Projects by AI spend (30d)</p>
+                            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Projects by AI spend (30d)</p>
                             <MiniTable block={d.get("projects", {}) as dict} />
                         </div>
                         <div className="col-span-12">
-                            <p className="mb-1 text-[11px] font-medium text-muted-foreground">Recent activity (latest 40 events)</p>
+                            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Session replays (PostHog player)</p>
+                            {if len(replays) == 0 {
+                                <p className="text-xs text-muted-foreground">No recordings for this user.</p>
+                            }}
+                            <div className="flex flex-wrap gap-2">
+                                {for (rpi, rp) in enumerate(replays) {
+                                    <a key={"rp" + str(rpi)} href={str(rp["href"])} target="_blank" className="rounded-md border border-border px-2 py-1 text-xs text-primary hover:bg-accent">{str(rp["label"])}</a>
+                                }}
+                            </div>
+                        </div>
+                        <div className="col-span-12">
+                            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Recent activity (latest 40 events)</p>
                             <MiniTable block={d.get("timeline", {}) as dict} />
                         </div>
                     </div>

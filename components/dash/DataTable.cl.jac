@@ -159,7 +159,7 @@ def HeadBtn(label: str, idx: int, marker: str, on_sort: Callable[[int], None]) -
     }
     return <button type="button" onClick={h} className="inline-flex cursor-pointer select-none items-center gap-1 hover:text-foreground">
         <span>{label}</span>
-        <span className="text-[9px] text-muted-foreground">{marker}</span>
+        <span className="text-[10px] text-muted-foreground">{marker}</span>
     </button>;
 }
 
@@ -313,8 +313,8 @@ def:pub DataTable(columns: list, rows: list, env: str) -> JsxElement {
     return <div className="flex flex-col gap-2">
         {if show_controls {
             <div className="flex flex-wrap items-center justify-between gap-2">
-                <Input className="h-7 w-48 text-xs" value={q} onChange={on_q} placeholder="Search…" />
-                <span className="text-[11px] text-muted-foreground">{range_txt}</span>
+                <Input className="h-8 w-56 text-sm" value={q} onChange={on_q} placeholder="Search…" />
+                <span className="text-xs text-muted-foreground">{range_txt}</span>
             </div>
         }}
         <div className="overflow-x-auto">
@@ -322,7 +322,7 @@ def:pub DataTable(columns: list, rows: list, env: str) -> JsxElement {
                 <TableHeader>
                     <TableRow>
                         {for h in headers {
-                            <TableHead key={"h" + str(h["i"])} className="text-xs">
+                            <TableHead key={"h" + str(h["i"])} className="text-sm">
                                 <HeadBtn label={str(h["label"])} idx={h["i"] as int} marker={str(h["marker"])} on_sort={on_sort} />
                             </TableHead>
                         }}
@@ -330,12 +330,12 @@ def:pub DataTable(columns: list, rows: list, env: str) -> JsxElement {
                 </TableHeader>
                 <TableBody>
                     {if len(frows) == 0 {
-                        <TableRow><TableCell className="text-xs text-muted-foreground">No data in this window.</TableCell></TableRow>
+                        <TableRow><TableCell className="text-sm text-muted-foreground">No data in this window.</TableCell></TableRow>
                     }}
                     {for fr in frows {
                         <TableRow key={str(fr["k"])}>
                             {for cc in fr["cells"] {
-                                <TableCell key={str(cc["k"])} className={"text-xs " + str(cc["a"])}>
+                                <TableCell key={str(cc["k"])} className={"text-sm " + str(cc["a"])}>
                                     <CellVal cc={cc} on_user={pick_user} on_project={pick_project} />
                                 </TableCell>
                             }}
@@ -353,7 +353,7 @@ def:pub DataTable(columns: list, rows: list, env: str) -> JsxElement {
         {if show_controls and (pages > 1 or total > 10) {
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-muted-foreground">Rows:</span>
+                    <span className="text-xs text-muted-foreground">Rows:</span>
                     <Select value={ps_value} onValueChange={on_page_size}>
                         <SelectTrigger className="h-7 w-16 text-xs"><SelectValue /></SelectTrigger>
                         <SelectContent>
@@ -367,7 +367,7 @@ def:pub DataTable(columns: list, rows: list, env: str) -> JsxElement {
                     </Select>
                 </div>
                 <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-muted-foreground">{page_txt}</span>
+                    <span className="text-xs text-muted-foreground">{page_txt}</span>
                     <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={prev_page} disabled={prev_disabled}>← Prev</Button>
                     <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={next_page} disabled={next_disabled}>Next →</Button>
                 </div>

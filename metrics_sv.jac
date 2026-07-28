@@ -2488,22 +2488,72 @@ async def:priv user_360(user: str, env: str) -> dict {
         asyncio.to_thread(run_hogql, q_summary),
         asyncio.to_thread(run_hogql, q_models),
         asyncio.to_thread(run_hogql, q_projects),
-        asyncio.to_thread(run_hogql, q_timeline)
+        asyncio.to_thread(run_hogql, q_timeline),
+        asyncio.to_thread(_fetch_recordings, pid)
     );
     out: dict = {"user": user, "window": "last 30 days", "error": ""};
-    labels = ["profile", "summary", "models", "projects", "timeline"];
+    labels = ["profile", "summary", "models", "projects", "timeline", "replays"];
     i = 0;
     for res in results {
         rd = res as dict;
         if "error" in rd {
             out[labels[i]] = {"columns": [], "rows": []};
             out["error"] = str(rd["error"])[:120];
+        } elif "rows" in rd {
+            out[labels[i]] = rd;
         } else {
             out[labels[i]] = {"columns": rd["columns"], "rows": rd["results"]};
         }
         i = i + 1;
     }
     return out;
+}
+
+# Users directory (User-360 full page, spec Phase 1) — every active person of
+# the last 30d by recency; each row drills into the 360 panel client-side.
+async def:priv user_list(env: str) -> dict {
+    env = _clamp_env(env);
+    ef = env_filter(env);
+    sql = ("SELECT coalesce(nullIf(toString(any(person.properties.email)),''),"
+        + " nullIf(toString(any(person.properties.display_name)),''),"
+        + " nullIf(toString(any(person.properties.name)),''),"
+        + " concat('anon:', substring(toString(person_id),1,8))) user,"
+        + " coalesce(toString(any(person.properties.plan)),'') plan,"
+        + " substring(toString(max(timestamp)),1,16) last_seen,"
+        + " count() events, countIf(event='ai_message_sent') ai_turns,"
+        + " countIf(event='project_created') projects,"
+        + " round(coalesce(sumIf(toFloat64OrNull(toString(properties.cost_usd)), event='ai_generation_metered'),0),2) cost_usd"
+        + " FROM events WHERE true " + ef + " AND timestamp > now() - INTERVAL 30 DAY"
+        + " GROUP BY person_id ORDER BY max(timestamp) DESC LIMIT 200");
+    res = await asyncio.to_thread(run_hogql, sql);
+    if "error" in res {
+        return {"columns": [], "rows": [], "error": str(res["error"])[:120]};
+    }
+    return {"columns": res["columns"], "rows": res["results"], "error": ""};
+}
+
+# Session replays for one person (PostHog native) — deep-links into the player.
+def _fetch_recordings(pid: str) -> dict {
+    try {
+        resp = requests.get(
+            f"{PH_HOST}/api/projects/{PH_PROJECT}/session_recordings?person_uuid={pid}&limit=5",
+            headers={"Authorization": f"Bearer {PH_KEY}"}, timeout=15);
+        if resp.status_code != 200 {
+            return {"columns": [], "rows": []};
+        }
+        d = resp.json();
+        rows: list = [];
+        for r in (d.get("results", []) as list) {
+            rd = r as dict;
+            dur = rd.get("recording_duration", 0);
+            rows.append([str(rd.get("start_time", ""))[:16].replace("T", " "),
+                         round((dur if dur is not None else 0) as float),
+                         str(rd.get("id", ""))]);
+        }
+        return {"columns": ["started_utc", "duration_s", "replay_id"], "rows": rows};
+    } except Exception {
+        return {"columns": [], "rows": []};
+    }
 }
 
 # Project 360 (P4) — drill-down for clickable project_id cells. Same shape as

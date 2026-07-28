@@ -79,20 +79,20 @@ def:pub PublicReport() -> JsxElement {
                 <Card>
                     <CardHeader>
                         <CardTitle className="text-base">Report not found</CardTitle>
-                        <CardDescription className="text-xs">This share link is invalid or has been revoked.</CardDescription>
+                        <CardDescription className="text-sm">This share link is invalid or has been revoked.</CardDescription>
                     </CardHeader>
                 </Card>
             } else {
                 <div className="flex flex-col gap-4">
                     <div className="flex flex-col gap-1">
                         <div className="flex flex-wrap items-center gap-2">
-                            <h1 className="text-xl font-semibold">{title}</h1>
+                            <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
                             <Badge variant="secondary">shared snapshot</Badge>
                             {if masked {
                                 <Badge variant="outline">emails masked</Badge>
                             }}
                         </div>
-                        <p className="text-xs text-muted-foreground">{hdr_sub}</p>
+                        <p className="text-sm text-muted-foreground">{hdr_sub}</p>
                     </div>
                     <div className="grid grid-cols-12 gap-4">
                         {for fr in secs {

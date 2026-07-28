@@ -1,7 +1,7 @@
 sv import from ..metrics_sv { scope_count, window_list }
 import from "@hugeicons/react" { HugeiconsIcon }
 import from "@hugeicons/core-free-icons" {
-    DashboardSquare01Icon, UserGroupIcon, Message01Icon, CheckmarkBadge01Icon,
+    DashboardSquare01Icon, UserGroupIcon, UserMultiple02Icon, Message01Icon, CheckmarkBadge01Icon,
     Analytics01Icon, PuzzleIcon, DollarCircleIcon, Rocket01Icon, Pulse01Icon,
     Comment01Icon, SparklesIcon, PinIcon, File01Icon, Settings01Icon
 }
@@ -17,6 +17,7 @@ import from .ui.tooltip { TooltipProvider }
 import from .pages.AskPage { AskPage }
 import from .pages.PinnedPage { PinnedPage }
 import from .pages.ReportsPage { ReportsPage }
+import from .pages.UsersDirectoryPage { UsersDirectoryPage }
 import from .pages.OverviewPage { OverviewPage }
 import from .pages.UsersPage { UsersPage }
 import from .pages.RequestsPage { RequestsPage }
@@ -51,6 +52,7 @@ glob NAV: list = [
         {"label": "Feedback & Roadmap", "page": "feedback", "icon": Comment01Icon}
     ]},
     {"group": "Detail", "items": [
+        {"label": "Users directory", "page": "directory", "icon": UserMultiple02Icon},
         {"label": "Ask (AI builder)", "page": "ask", "icon": SparklesIcon},
         {"label": "My Dashboard", "page": "pinned", "icon": PinIcon},
         {"label": "Reports", "page": "reports", "icon": File01Icon}
@@ -61,7 +63,7 @@ glob NAV: list = [
 ];
 
 glob PAGE_TITLES: dict = {
-    "ask": "Ask (AI builder)", "pinned": "My Dashboard", "reports": "Reports",
+    "ask": "Ask (AI builder)", "pinned": "My Dashboard", "reports": "Reports", "directory": "Users directory",
     "overview": "Overview", "users": "Users & Adoption", "features": "Feature Usage",
     "feedback": "Feedback & Roadmap", "requests": "AI Requests", "quality": "AI Quality",
     "advanced": "Advanced Analytics", "impact": "Developer Impact", "cost": "Cost & Usage",
@@ -232,7 +234,7 @@ def:pub AppShell(on_logout: Callable[[], None]) -> JsxElement {
                 </SidebarContent>
                 <SidebarFooter>
                     <div className="flex items-center justify-between gap-2 px-2 py-1">
-                        <span className="text-[11px] text-muted-foreground">PostHog · 425465</span>
+                        <span className="text-xs text-muted-foreground">PostHog · 425465</span>
                         <Button variant="ghost" size="sm" onClick={handle_logout}>Log out</Button>
                     </div>
                 </SidebarFooter>
@@ -245,10 +247,10 @@ def:pub AppShell(on_logout: Callable[[], None]) -> JsxElement {
                         <SidebarTrigger />
                         <div className="flex flex-col">
                             <div className="flex items-center gap-2">
-                                <h1 className="text-lg font-semibold">{page_title}</h1>
+                                <h1 className="text-2xl font-semibold tracking-tight">{page_title}</h1>
                                 <Badge variant="outline">Internal · read-only</Badge>
                             </div>
-                            <p className="text-xs text-muted-foreground">JacHammer Analytics Dashboard</p>
+                            <p className="text-sm text-muted-foreground">JacHammer Analytics Dashboard</p>
                         </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -283,11 +285,11 @@ def:pub AppShell(on_logout: Callable[[], None]) -> JsxElement {
                     </div>
                 </header>
 
-                <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/30 px-6 py-2 text-[11px] text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/30 px-6 py-2 text-xs text-muted-foreground">
                     <span className="font-medium text-foreground">{scope_txt}</span>
                     <span>· env = {env} · all times shown in</span>
                     <Select value={tz_value} onValueChange={on_tz}>
-                        <SelectTrigger className="h-6 w-fit gap-1 border-none bg-transparent px-1 text-[11px] font-medium text-foreground shadow-none">🕒 {tz_label}</SelectTrigger>
+                        <SelectTrigger className="h-6 w-fit gap-1 border-none bg-transparent px-1 text-xs font-medium text-foreground shadow-none">🕒 {tz_label}</SelectTrigger>
                         <SelectContent>
                             <SelectGroup>
                                 <SelectItem value="auto">Device timezone</SelectItem>
@@ -322,6 +324,8 @@ def:pub AppShell(on_logout: Callable[[], None]) -> JsxElement {
                         <PinnedPage env={env} date_from={date_from} date_to={date_to} refresh_n={refresh_n} />
                     } elif active_page == "reports" {
                         <ReportsPage env={env} date_from={date_from} date_to={date_to} refresh_n={refresh_n} />
+                    } elif active_page == "directory" {
+                        <UsersDirectoryPage env={env} date_from={date_from} date_to={date_to} refresh_n={refresh_n} />
                     } elif active_page == "overview" {
                         <OverviewPage env={env} date_from={date_from} date_to={date_to} refresh_n={refresh_n} />
                     } elif active_page == "users" {

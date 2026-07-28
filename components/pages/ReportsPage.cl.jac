@@ -54,14 +54,14 @@ def:pub SectionBlock(fr: dict) -> JsxElement {
     title = str(fr["title"]);
     if typ == "header" {
         return <div className="col-span-12 mt-2">
-            <h3 className="border-b border-border pb-1 text-sm font-semibold">{title}</h3>
+            <h3 className="border-b border-border pb-1 text-lg font-semibold">{title}</h3>
         </div>;
     }
     if typ == "text" {
         return <div className="col-span-12">
             <Card>
                 <CardHeader className="pb-2"><CardTitle className="text-xs text-muted-foreground">{title}</CardTitle></CardHeader>
-                <CardContent><p className="whitespace-pre-wrap text-sm">{str(fr["md"])}</p></CardContent>
+                <CardContent><p className="whitespace-pre-wrap text-base leading-relaxed">{str(fr["md"])}</p></CardContent>
             </Card>
         </div>;
     }
@@ -72,7 +72,7 @@ def:pub SectionBlock(fr: dict) -> JsxElement {
         </div>;
     }
     return <div className="col-span-12 lg:col-span-6">
-        <Card><CardHeader><CardDescription className="text-xs">"{title}" — not built yet. Click Rebuild.</CardDescription></CardHeader></Card>
+        <Card><CardHeader><CardDescription className="text-sm">"{title}" — not built yet. Click Rebuild.</CardDescription></CardHeader></Card>
     </div>;
 }
 
@@ -322,7 +322,7 @@ def:pub ReportsPage(env: str, date_from: str, date_to: str, refresh_n: int) -> J
             <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                     <div className="flex flex-col">
-                        <h2 className="text-base font-semibold">Reports</h2>
+                        <h2 className="text-xl font-semibold tracking-tight">Reports</h2>
                         <p className="text-xs text-muted-foreground">Snapshot documents built from verified registry metrics — numbers are frozen at build time.</p>
                     </div>
                     <Button onClick={toggle_form}>{new_btn_label}</Button>
@@ -332,7 +332,7 @@ def:pub ReportsPage(env: str, date_from: str, date_to: str, refresh_n: int) -> J
                     <Card>
                         <CardHeader>
                             <CardTitle className="text-sm">New report</CardTitle>
-                            <CardDescription className="text-xs">Window supports minute precision (e.g. a 7.5-hour hackathon). Times are your local timezone ({tzn}) — stored and queried as UTC. Environment: {env}.</CardDescription>
+                            <CardDescription className="text-sm">Window supports minute precision (e.g. a 7.5-hour hackathon). Times are your local timezone ({tzn}) — stored and queried as UTC. Environment: {env}.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <div className="grid grid-cols-12 gap-3">
@@ -385,7 +385,7 @@ def:pub ReportsPage(env: str, date_from: str, date_to: str, refresh_n: int) -> J
                     <Card>
                         <CardHeader>
                             <CardTitle className="text-base">No reports yet</CardTitle>
-                            <CardDescription className="text-xs">Create one from the event-report template — it rebuilds the full hackathon-style report (participants, cost per model/user/project, BYOK, deploys, upgrades, issues) for any window.</CardDescription>
+                            <CardDescription className="text-sm">Create one from the event-report template — it rebuilds the full hackathon-style report (participants, cost per model/user/project, BYOK, deploys, upgrades, issues) for any window.</CardDescription>
                         </CardHeader>
                     </Card>
                 } else {
@@ -422,11 +422,11 @@ def:pub ReportsPage(env: str, date_from: str, date_to: str, refresh_n: int) -> J
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex flex-col">
                         <div className="flex items-center gap-2">
-                            <h2 className="text-base font-semibold">{hdr_title}</h2>
+                            <h2 className="text-xl font-semibold tracking-tight">{hdr_title}</h2>
                             <Badge variant="outline">{active_env}</Badge>
                             <Badge variant="secondary">snapshot</Badge>
                         </div>
-                        <p className="text-xs text-muted-foreground">{hdr_sub}</p>
+                        <p className="text-sm text-muted-foreground">{hdr_sub}</p>
                     </div>
                     <div className="flex items-center gap-2">
                         <Button variant="ghost" size="sm" onClick={back}>← All reports</Button>

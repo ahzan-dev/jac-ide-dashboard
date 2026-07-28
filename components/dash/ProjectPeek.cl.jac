@@ -48,17 +48,18 @@ def:pub ProjectPeek(project: str, env: str, on_close: Callable[[], None]) -> Jsx
     stats: list = [];
     for k in ["users", "ai_sent", "ai_done", "ai_failed", "cost_runs", "cost_usd", "previews_requested"] {
         v = summ.get(k);
-        stats = stats + [{"k": k.replace("_", " "), "v": "0" if v is None else str(v)}];
+        vs = str(v);
+        stats = stats + [{"k": k.replace("_", " "), "v": "0" if (v is None) or (vs == "undefined") or (vs == "null") else vs}];
     }
     err = str(d.get("error", ""));
 
     return <Card className="mt-2 border-primary/30">
         <CardHeader className="pb-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
-                <CardTitle className="text-sm">📦 {project}</CardTitle>
+                <CardTitle className="text-base font-semibold">📦 {project}</CardTitle>
                 <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={close}>✕ Close</Button>
             </div>
-            <CardDescription className="text-[11px]">{sub}</CardDescription>
+            <CardDescription className="text-sm">{sub}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
             {if loading {
@@ -71,22 +72,22 @@ def:pub ProjectPeek(project: str, env: str, on_close: Callable[[], None]) -> Jsx
                     <div className="flex flex-wrap gap-2">
                         {for (si, st) in enumerate(stats) {
                             <div key={"ps" + str(si)} className="rounded-md border border-border px-2 py-1">
-                                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{str(st["k"])} </span>
-                                <span className="text-xs font-semibold tabular-nums">{str(st["v"])}</span>
+                                <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{str(st["k"])} </span>
+                                <span className="text-sm font-semibold tabular-nums">{str(st["v"])}</span>
                             </div>
                         }}
                     </div>
                     <div className="grid grid-cols-12 gap-3">
                         <div className="col-span-12 lg:col-span-4">
-                            <p className="mb-1 text-[11px] font-medium text-muted-foreground">Cost by model (30d)</p>
+                            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cost by model (30d)</p>
                             <MiniTable block={d.get("models", {}) as dict} />
                         </div>
                         <div className="col-span-12 lg:col-span-8">
-                            <p className="mb-1 text-[11px] font-medium text-muted-foreground">Recent activity (latest 40 events)</p>
+                            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Recent activity (latest 40 events)</p>
                             <MiniTable block={d.get("timeline", {}) as dict} />
                         </div>
                     </div>
-                    <p className="text-[10px] text-muted-foreground">Deploy events carry no project id in telemetry, so per-project deploy history isn't shown (product tracking gap).</p>
+                    <p className="text-xs text-muted-foreground">Deploy events carry no project id in telemetry, so per-project deploy history isn't shown (product tracking gap).</p>
                 </div>
             }}
         </CardContent>
